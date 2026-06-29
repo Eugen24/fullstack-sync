@@ -13,6 +13,23 @@ then implemented identically on backend and app.
 Read `.fullstack-sync.json` (app root). If missing → run `/fullstack-setup`
 first. Use it to locate routers/schemas (backend) and constants/services (app).
 
+## 0b. Parallel mode (only if `.fullstack-sync/` exists)
+
+If a `.fullstack-sync/` dir exists (set up by `/fullstack-parallel-init`), this is a
+two-session run — read `${CLAUDE_PLUGIN_ROOT}/references/parallel-sync.md`. Then:
+
+- **Scope to my side.** Determine if this session is backend or app (from cwd vs the
+  config roots). Edit ONLY that side's files. Do NOT touch the other side — the other
+  session owns it. (Single-pass both-sides editing is for non-parallel mode only.)
+- **Respect ownership.** If `sync.json.owned_files` maps a file you're about to write to
+  the OTHER side, refuse that edit and tell the user to make it in the owning session.
+- **Check staleness first.** Run the `parallel-sync-status` logic; if the other side has
+  MOVED since the last reconcile, run `api-contract-sync` before building against it.
+- **Refresh my slice after editing.** Once my side is changed, re-derive my contract,
+  hash it via `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/fingerprint.py`, and write my
+  `*.fp.json` slice (`git_sha`, `contract_hash`, digest, `updated_at`). Tell the user to
+  reconcile (`parallel-sync-status`) once both sessions have updated their slices.
+
 ## 1. Pin the contract FIRST
 
 Before writing code, write the contract down and confirm it with the user:
