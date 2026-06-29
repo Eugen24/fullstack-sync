@@ -9,7 +9,7 @@
     {
       "name": "fullstack-sync",
       "description": "Keep a client app and its backend API in sync: detect/fix endpoint-contract drift, scan docs & specs (OpenAPI/GraphQL/proto/route-files), scaffold endpoints across both repos, run and verify both sides. Built for Flutter + FastAPI, stack-agnostic.",
-      "source": "./fullstack-sync",
+      "source": "./",
       "category": "development"
     }
   ]

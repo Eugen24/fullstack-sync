@@ -11,11 +11,12 @@ the client.
 ## Install
 
 ```
-claude plugin marketplace add /Users/neogenius24/Work1/claude-plugins
-claude plugin install fullstack-sync
+claude plugin marketplace add Eugen24/fullstack-sync
+claude plugin install fullstack-sync@neo-plugins
 ```
 
-(Or point your marketplace at the parent `claude-plugins` folder.)
+(Or, for local dev, point the marketplace at a local clone path instead of the
+GitHub slug.)
 
 ## First run
 
@@ -47,7 +48,7 @@ doc/spec files to treat as contract truth, and version base-paths.
 
 ## Why it exists
 
-Real drift caught on day one of dogfooding: app called `/v4/tasks/custom`
-(backend had `/v4/tasks/`), and three app URL constants + a consent route were
-missing entirely. Each was a silent runtime 404 the analyzer couldn't see.
-This plugin makes that visible before it ships.
+Real drift caught on day one of dogfooding: the app called an endpoint whose
+path didn't match the backend's, and several URL constants were missing or
+pointed at routes that didn't exist — each a silent runtime 404 the analyzer
+couldn't see. This plugin makes that visible before it ships.

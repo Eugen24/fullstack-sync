@@ -32,10 +32,11 @@ must edit both repos in parallel.
   honored on both sides" pattern beyond endpoints.
 
 ## Dogfood proof (v0.1, Flutter + FastAPI)
-First real run found 4 contract bugs the analyzer couldn't see:
-- `userValidate` → `/v3/user/validate` (no route, live 404) → repointed to `/v3/auth/validate`
-- `savedMeals` missing trailing slash → 307 redirect risk on POST → fixed
-- `userConsentAccept` referenced but undeclared (backend route existed) → constant added
-- `userSuggestions` → no backend route (latent) → constant removed
-~61 endpoints matched clean. Also surfaced backend routes the app hadn't wired
-yet (`/v4/groceries/ingredient-lists`, `/v4/groceries/inventory`).
+First real run on a private app↔API pair found 4 contract bugs the analyzer
+couldn't see, plus several unused/unwired routes — all of the classes this
+plugin targets:
+- a constant pointing at a non-existent route (live 404) → repointed to the real one
+- a collection path missing its trailing slash → 307 redirect risk on POST → fixed
+- a constant referenced in code but never declared (route existed) → constant added
+- a constant for a route the backend never implemented (latent) → removed
+~60 endpoints matched clean; also surfaced backend routes the app hadn't wired yet.

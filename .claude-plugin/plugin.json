@@ -5,7 +5,7 @@
   "author": {
     "name": "Eugen Luchian"
   },
-  "homepage": "https://github.com/neogenius24/neo-plugins",
+  "homepage": "https://github.com/Eugen24/fullstack-sync",
   "hooks": {
     "SessionStart": [
       {

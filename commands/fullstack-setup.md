@@ -93,7 +93,7 @@ found (never invent paths). Shape:
     "migrations": "alembic"
   },
   "extra_dirs": [],
-  "docs": ["routers/v3/meal_plans.md", "..."],
+  "docs": ["routers/<area>.md", "docs/openapi.yaml", "..."],
   "base_paths": { "v3": "/v3", "v4": "/v4" }
 }
 ```
