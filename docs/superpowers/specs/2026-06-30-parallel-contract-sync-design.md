@@ -76,10 +76,17 @@ On demand — at work start, before building against the other side, and before 
 
 ### Shared-file safety (Model B)
 
-`sync.json.owned_files`: a map of glob → owner (`"backend"` | `"app"`), e.g.
-`openapi.yaml → backend`, `shared/types/** → backend`. Before writing any file matching
-a glob it does **not** own, the agent refuses and tells the user
-("`openapi.yaml` is backend-owned; make that change in the backend session").
+**Model B is impossible when the app and backend are separate repos** — two repos
+cannot write the same file. It only applies when a *third shared package* exists (a
+shared proto/types repo both sides edit). Therefore ownership is **auto-detected, not
+declared**: `/fullstack-parallel-init` looks for a shared surface (a dir/repo referenced
+by both sides, e.g. `extra_dirs` holding shared types); if none, `sync.json.owned_files`
+stays empty and this entire branch is dormant — zero map to maintain.
+
+When a shared surface *is* found, `sync.json.owned_files` maps glob → owner
+(`"backend"` | `"app"`), e.g. `shared/types/** → backend`. Before writing any file
+matching a glob it does **not** own, the agent refuses and tells the user
+("`shared/types` is backend-owned; make that change in the backend session").
 
 Backstop: each session works on a branch (its worktree). Integration is `git merge`. If
 the partition is ever violated, git surfaces the conflict markers and the agent resolves
@@ -108,6 +115,12 @@ Deterministic: reordering routes → identical hash; renaming a field → differ
 drift caught. The hash doubles as the **cache key** for the derived contract summary
 (token-efficiency layer).
 
+**Scope: structural only** (`method`, `path`, `field-names`). Auth gates, error strings,
+and pagination envelopes are deliberately excluded — the hash is a *drift trigger*, not
+the deep check. Including volatile strings would flip the hash on cosmetic edits and
+force false-positive re-syncs. When the structural hash flips, `api-contract-sync` runs
+the deep pass (auth, errors, envelopes). Hash detects; the skill diagnoses.
+
 ## Components to build
 
 1. **`references/parallel-sync.md`** — the protocol spec: state-file formats, ownership
@@ -118,9 +131,10 @@ drift caught. The hash doubles as the **cache key** for the derived contract sum
    auto-fix (defers to `api-contract-sync`).
 3. **Extend `fullstack-feature`** — parallel mode: edit only the side this session owns,
    write this session's `*.fp.json` slice, warn if the other side's slice is stale.
-4. **Command `/fullstack-parallel-init`** — creates `.fullstack-sync/`, prompts the
-   ownership partition, prints the `git worktree add` commands for both repos, records
-   `state_dir_abspath` in `sync.json`, adds `.fullstack-sync/` to `.gitignore`.
+4. **Command `/fullstack-parallel-init`** — creates `.fullstack-sync/`, **auto-detects a
+   shared surface** and writes `owned_files` only if one exists (else empty), prints the
+   `git worktree add` commands for both repos, records `state_dir_abspath` in `sync.json`,
+   adds `.fullstack-sync/` to `.gitignore`.
 5. **Fingerprint helper** — a deterministic hash via a documented `jq`/`sha256sum`
    snippet, or a tiny script under the plugin if the snippet proves fragile.
 
