@@ -22,8 +22,8 @@ Get this worktree's HEAD: `git rev-parse HEAD`. If it equals the `git_sha` alrea
 slice (`backend.fp.json` or `app.fp.json`) AND `git status --porcelain` is empty, skip
 re-derivation — the contract can't have changed. If the tree is dirty, re-derive (an
 uncommitted edit doesn't move HEAD). Otherwise re-derive my contract exactly as `api-contract-sync` does (my routes,
-or my calls), build the `{"endpoints":[...]}` input (normalize paths, snake_case fields;
-on the app side map camelCase→snake), pipe it through
+or my calls), build the `{"endpoints":[...]}` input (normalize paths; pass field names
+RAW — the helper normalizes camelCase/snake itself), pipe it through
 `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/fingerprint.py`, and write my slice
 (`git_sha`, `contract_hash`, `routes_digest`/`calls_digest`, `updated_at`).
 

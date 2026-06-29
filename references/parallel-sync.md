@@ -41,10 +41,15 @@ The helper at `scripts/fingerprint.py` reads this JSON on stdin and prints a has
 ```
 - `method` — uppercase HTTP verb (or operation name for GraphQL/gRPC).
 - `path` — normalized: lowercase, `{id}` placeholder for any path param, base-path stripped.
-- `fields` — request + response field names, snake_case (canonical backend names);
-  the app side maps camelCase→snake before hashing so both sides hash equal when in sync.
+- `fields` — request + response field names, passed RAW (don't pre-map). The helper
+  normalizes every field to snake_case itself (`createdAt`/`userId` → `created_at`/`user_id`;
+  already-snake names unchanged), so the app's camelCase and the backend's snake_case
+  produce the SAME hash when the contract agrees.
 
-The helper sorts endpoints and fields internally, so ordering never affects the hash.
+The helper sorts endpoints and normalizes+sorts fields internally, so ordering and
+camel/snake casing never affect the hash. **Acronym caveat:** an embedded acronym is split
+only at the case boundary — `OAuth2Token` → `o_auth2_token`, NOT `oauth2_token` — so both
+sides must agree on the snake spelling of acronym-bearing fields.
 
 ## Staleness detection (logical drift)
 
