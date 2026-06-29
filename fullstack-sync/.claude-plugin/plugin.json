@@ -1,0 +1,23 @@
+{
+  "name": "fullstack-sync",
+  "description": "Keep a client app and its backend API in sync: detect/fix endpoint-contract drift, scan docs & specs (OpenAPI/GraphQL/proto/route-files), scaffold endpoints across both repos, run and verify both sides. Built for Flutter + FastAPI, stack-agnostic.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Eugen Luchian"
+  },
+  "homepage": "https://github.com/neogenius24/neo-plugins",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh\"",
+            "timeout": 10,
+            "statusMessage": "Checking fullstack-sync config..."
+          }
+        ]
+      }
+    ]
+  }
+}
