@@ -59,6 +59,19 @@ For building a feature with one session per side at the same time:
    no locks, no orchestrator. See `references/parallel-sync.md`. Once both sides agree, `/fullstack-reconcile`
    (run from the app session) records the reconcile point so later drift is detected.
 
+## Testing
+
+```
+bash tests/run.sh
+```
+
+Runs the whole suite (python3 + git, no other deps): `fingerprint` unit tests
+(determinism + camel/snake normalization), `sync_state` unit tests (slice write,
+single-writer reconcile, drift status), and an end-to-end `test_protocol.sh` that drives
+two real git repos through init → slice → reconcile → drift via the `sync_state` CLI. Runs
+in CI on every push/PR (`.github/workflows/test.yml`). The mechanical state ops live in the
+tested `scripts/sync_state.py`; the model only does contract *extraction*.
+
 ## Why it exists
 
 Real drift caught on day one of dogfooding: the app called an endpoint whose

@@ -27,11 +27,11 @@ two-session run — read `${CLAUDE_PLUGIN_ROOT}/references/parallel-sync.md`. Th
   MOVED since the last reconcile, run `api-contract-sync` before building against it.
 - **Refresh my slice after editing.** Once my side is changed, re-derive my contract and
   pass field names RAW (the helper normalizes camelCase/snake itself, per
-  `references/parallel-sync.md`), hash it via
-  `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/fingerprint.py`, and write my `*.fp.json`
-  slice (`git_sha`, `contract_hash`, digest, `updated_at`). Once both sessions have
-  refreshed their slices, tell the user to run `/fullstack-reconcile` from the app
-  session to record the new reconcile point.
+  `references/parallel-sync.md`), then write my slice with the tested helper:
+  `echo '<endpoints-json>' | python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sync_state.py write-slice
+  --state-dir <state_dir> --side <backend|app> --git-sha <HEAD> --now <UTC>`. Once both
+  sessions have refreshed their slices, tell the user to run `/fullstack-reconcile` from
+  the app session to record the new reconcile point.
 
 ## 1. Pin the contract FIRST
 

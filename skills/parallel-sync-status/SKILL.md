@@ -23,14 +23,23 @@ slice (`backend.fp.json` or `app.fp.json`) AND `git status --porcelain` is empty
 re-derivation — the contract can't have changed. If the tree is dirty, re-derive (an
 uncommitted edit doesn't move HEAD). Otherwise re-derive my contract exactly as `api-contract-sync` does (my routes,
 or my calls), build the `{"endpoints":[...]}` input (normalize paths; pass field names
-RAW — the helper normalizes camelCase/snake itself), pipe it through
-`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/fingerprint.py`, and write my slice
-(`git_sha`, `contract_hash`, `routes_digest`/`calls_digest`, `updated_at`).
+RAW — the helper normalizes camelCase/snake itself). Then write my slice with the tested
+helper (it hashes + writes the right keys):
+
+```
+echo '<endpoints-json>' | python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sync_state.py \
+  write-slice --state-dir <state_dir> --side <backend|app> --git-sha <HEAD> --now <UTC>
+```
 
 ## 2. Check the other side
 
-Read the OTHER slice. Compute staleness:
-- `other.contract_hash` vs `sync.json.<other>_hash_at_sync`:
+Compute staleness with the same helper (exit 0 IN_SYNC, 2 MOVED, 3 NO_RECONCILE):
+
+```
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sync_state.py status --state-dir <state_dir> --side <mine>
+```
+
+Equivalent rule it applies — `other.contract_hash` vs `sync.json.<other>_hash_at_sync`:
   - equal (or `*_hash_at_sync` is null and the other slice is fresh) → **in sync** on the
     other side.
   - different → **the other side moved** since the last reconcile.
