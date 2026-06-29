@@ -39,12 +39,24 @@ repos are first-class in the session.
 | `fullstack-feature` | "add this endpoint on backend and app" — scaffolds route+schema AND constant+service+model with identical field names |
 | `fullstack-run` | "run backend and app together" — boots the API, health-checks it, points the app at local |
 | `fullstack-verify` | "verify before commit" — app analyze + backend tests + migration drift + contract recheck |
+| `parallel-sync-status` | two-session parallel mode — "am I in sync", "did the backend change", report contract drift between the backend and app sessions (report-only; fixes go through `api-contract-sync`) |
 
 ## Config: `.fullstack-sync.json`
 
 Lives at the app repo root, written by `/fullstack-setup`, read by every skill.
 Records app/backend roots + stacks, the endpoints file, router/schema globs, the
 doc/spec files to treat as contract truth, and version base-paths.
+
+## Parallel mode (two sessions)
+
+For building a feature with one session per side at the same time:
+
+1. `/fullstack-parallel-init` — creates `.fullstack-sync/`, auto-detects shared-file
+   ownership, prints the `git worktree` commands.
+2. Open one `claude` session per worktree (backend / app).
+3. Each session: `parallel-sync-status` to check drift, `fullstack-feature` to build its
+   side. Drift is caught by comparing a structural contract fingerprint — no event log,
+   no locks, no orchestrator. See `references/parallel-sync.md`.
 
 ## Why it exists
 

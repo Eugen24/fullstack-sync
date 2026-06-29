@@ -8,17 +8,15 @@
 - `fullstack-verify` — app analyze + backend tests + migration drift + contract recheck
 - SessionStart hook — auto-load config paths, or nudge `/fullstack-setup`
 - `references/spec-detection.md` — stack → spec-format → route-file-fallback matrix
+- `/fullstack-parallel-init` + `parallel-sync-status` — two-session parallel mode via per-session contract fingerprints (`references/parallel-sync.md`)
 
 ## v0.2 — candidate features (build when the pain is real)
 
-### Scoped subagents + write-back reconcile  (deferred — see note)
-`/backend` + `/frontend` slash commands that open subagents scoped to one repo,
-each reading `.fullstack-sync.json`, writing changes back, with a master `/sync`
-reconciling. **Deferred on purpose**: adds state-reconciliation + agent-lifecycle
-+ write-conflict complexity. Core value (drift detect + both-sides scaffold)
-doesn't need it — `fullstack-feature` already edits both sides in one pass, and
-`Agent` + `/add-dir` already give scoped exploration. Build only when two agents
-must edit both repos in parallel.
+### Scoped subagents + parallel contract sync  (shipped in v0.2)
+Per-session fingerprint slices under `.fullstack-sync/` + on-demand drift detection,
+instead of a live orchestrator. Single-writer partition removes lost-update without
+locks or an event log (git is the log). Shared-file conflict handled by auto-detected
+ownership + git-merge backstop. See `references/parallel-sync.md`.
 
 ### Other candidates
 - **OpenAPI/GraphQL codegen integration** — when the app uses a generated client,
