@@ -11,7 +11,9 @@ file shapes.
 
 **Run this from the APP session only.** The app session owns the state dir, so it is
 the single writer of `sync.json` — running reconcile from the backend session too would
-reintroduce a two-writer file. If this is the backend session, stop and tell the user.
+reintroduce a two-writer file. Determine your side as in `parallel-sync-status` §0
+(backend if the cwd is the backend repo, else app). If this is the backend session, stop
+and tell the user.
 
 ## 0. Load state
 
