@@ -25,10 +25,13 @@ two-session run — read `${CLAUDE_PLUGIN_ROOT}/references/parallel-sync.md`. Th
   the OTHER side, refuse that edit and tell the user to make it in the owning session.
 - **Check staleness first.** Run the `parallel-sync-status` logic; if the other side has
   MOVED since the last reconcile, run `api-contract-sync` before building against it.
-- **Refresh my slice after editing.** Once my side is changed, re-derive my contract,
-  hash it via `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/fingerprint.py`, and write my
-  `*.fp.json` slice (`git_sha`, `contract_hash`, digest, `updated_at`). Tell the user to
-  reconcile (`parallel-sync-status`) once both sessions have updated their slices.
+- **Refresh my slice after editing.** Once my side is changed, re-derive my contract
+  (on the app side, map camelCase→snake on field names before hashing, per
+  `references/parallel-sync.md`), hash it via
+  `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/fingerprint.py`, and write my `*.fp.json`
+  slice (`git_sha`, `contract_hash`, digest, `updated_at`). Once both sessions have
+  refreshed their slices, tell the user to run `/fullstack-reconcile` from the app
+  session to record the new reconcile point.
 
 ## 1. Pin the contract FIRST
 

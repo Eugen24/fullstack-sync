@@ -56,7 +56,8 @@ For building a feature with one session per side at the same time:
 2. Open one `claude` session per worktree (backend / app).
 3. Each session: `parallel-sync-status` to check drift, `fullstack-feature` to build its
    side. Drift is caught by comparing a structural contract fingerprint — no event log,
-   no locks, no orchestrator. See `references/parallel-sync.md`.
+   no locks, no orchestrator. See `references/parallel-sync.md`. Once both sides agree, `/fullstack-reconcile`
+   (run from the app session) records the reconcile point so later drift is detected.
 
 ## Why it exists
 

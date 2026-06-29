@@ -19,8 +19,9 @@ session and the app root was added with `/add-dir`). If absent → tell the user
 ## 1. Refresh my own slice
 
 Get this worktree's HEAD: `git rev-parse HEAD`. If it equals the `git_sha` already in my
-slice (`backend.fp.json` or `app.fp.json`), skip re-derivation — the contract can't have
-changed. Otherwise re-derive my contract exactly as `api-contract-sync` does (my routes,
+slice (`backend.fp.json` or `app.fp.json`) AND `git status --porcelain` is empty, skip
+re-derivation — the contract can't have changed. If the tree is dirty, re-derive (an
+uncommitted edit doesn't move HEAD). Otherwise re-derive my contract exactly as `api-contract-sync` does (my routes,
 or my calls), build the `{"endpoints":[...]}` input (normalize paths, snake_case fields;
 on the app side map camelCase→snake), pipe it through
 `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/fingerprint.py`, and write my slice
@@ -45,8 +46,9 @@ PARALLEL STATUS  (this session: <backend|app>)
 
 If the other side MOVED → tell the user to run **api-contract-sync** before building
 against it (that skill does the deep diff + fix and is the only thing that should change
-code). If both slices are fresh and equal, suggest they're safe to reconcile (update
-`sync.json.*_hash_at_sync` to the current hashes + `synced_at`).
+code). If both slices are fresh and equal, suggest the user run `/fullstack-reconcile` from
+the app session to record the reconcile point (that command is the only writer of
+`sync.json.*_hash_at_sync` — this skill never writes it).
 
 ## Output
 

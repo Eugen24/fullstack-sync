@@ -56,6 +56,12 @@ A session, on demand (work start / before building against the other side / befo
 3. "Am I stale?" = read the OTHER slice; if `other.contract_hash != sync.json.<other>_hash_at_sync`,
    the other side moved → run `api-contract-sync` before proceeding.
 
+**Recording a reconcile.** The baseline `sync.json.<side>_hash_at_sync` is written ONLY
+by `/fullstack-reconcile`, run from the app session (the single writer of `sync.json`).
+A slice is **fresh** when its `git_sha` equals that worktree's HEAD and the tree is
+clean (`git status --porcelain` empty). Until the first reconcile, both
+`*_hash_at_sync` are null and status reports "no reconcile yet" rather than drift.
+
 ## Ownership (physical drift — only with a shared package)
 
 Two separate repos cannot write the same file, so ownership is dormant unless a third
