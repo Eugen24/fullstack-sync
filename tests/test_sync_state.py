@@ -130,6 +130,41 @@ def test_status_moved_after_backend_changes():
         shutil.rmtree(d)
 
 
+def test_check_fresh_skip_when_sha_matches_and_clean():
+    d = _fresh_state()
+    try:
+        sync_state.write_slice(d, "backend", "sha1", BE, "t0")
+        assert sync_state.check_fresh(d, "backend", "sha1", dirty=False) == "SKIP"
+    finally:
+        shutil.rmtree(d)
+
+
+def test_check_fresh_derive_when_dirty():
+    d = _fresh_state()
+    try:
+        sync_state.write_slice(d, "backend", "sha1", BE, "t0")
+        assert sync_state.check_fresh(d, "backend", "sha1", dirty=True) == "DERIVE"
+    finally:
+        shutil.rmtree(d)
+
+
+def test_check_fresh_derive_when_sha_differs():
+    d = _fresh_state()
+    try:
+        sync_state.write_slice(d, "backend", "sha1", BE, "t0")
+        assert sync_state.check_fresh(d, "backend", "sha2", dirty=False) == "DERIVE"
+    finally:
+        shutil.rmtree(d)
+
+
+def test_check_fresh_derive_when_no_slice():
+    d = _fresh_state()  # slices are {}
+    try:
+        assert sync_state.check_fresh(d, "backend", "sha1", dirty=False) == "DERIVE"
+    finally:
+        shutil.rmtree(d)
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

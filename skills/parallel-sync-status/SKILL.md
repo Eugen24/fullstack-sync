@@ -18,12 +18,22 @@ session and the app root was added with `/add-dir`). If absent → tell the user
 
 ## 1. Refresh my own slice
 
-Get this worktree's HEAD: `git rev-parse HEAD`. If it equals the `git_sha` already in my
-slice (`backend.fp.json` or `app.fp.json`) AND `git status --porcelain` is empty, skip
-re-derivation — the contract can't have changed. If the tree is dirty, re-derive (an
-uncommitted edit doesn't move HEAD). Otherwise re-derive my contract exactly as `api-contract-sync` does (my routes,
-or my calls), build the `{"endpoints":[...]}` input (normalize paths; pass field names
-RAW — the helper normalizes camelCase/snake itself). Then write my slice with the tested
+Decide whether re-derivation can be skipped with the tested guard (prints `SKIP`/`DERIVE`,
+exit 0/1) — pass `--dirty` when `git status --porcelain` is non-empty:
+
+```
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sync_state.py check-fresh \
+  --state-dir <state_dir> --side <backend|app> --git-sha "$(git rev-parse HEAD)" \
+  $(test -n "$(git status --porcelain)" && echo --dirty)
+```
+
+On `SKIP` the contract can't have changed — stop here. On `DERIVE`, re-derive my contract
+exactly as `api-contract-sync` does (my routes, or my calls), and build the
+`{"endpoints":[...]}` input (normalize paths; pass field names RAW — the helper normalizes
+camelCase/snake itself). **FastAPI backend shortcut:** for the common case you can derive
+deterministically with `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/extract_fastapi.py <routers-dir>`
+(parses `@router` decorators + `response_model`; falls back to `api-contract-sync` for
+include_router mounting / request bodies / nested models). Then write my slice with the tested
 helper (it hashes + writes the right keys):
 
 ```

@@ -71,6 +71,20 @@ def reconcile(state_dir, side, now):
     return d
 
 
+def check_fresh(state_dir, side, current_sha, dirty):
+    """Decide whether re-derivation can be skipped (cheap-skip guard).
+
+    SKIP only when my slice's git_sha equals the current worktree HEAD AND the
+    tree is clean — an uncommitted edit doesn't move HEAD, so a dirty tree must
+    re-derive. The caller supplies `dirty` (e.g. `git status --porcelain`
+    non-empty) since the git context lives in the session, not here.
+    """
+    slc = _load(os.path.join(state_dir, SLICE[side]))
+    if not dirty and slc.get("git_sha") == current_sha and "contract_hash" in slc:
+        return "SKIP"
+    return "DERIVE"
+
+
 def status(state_dir, side):
     """Has the OTHER side moved since the last reconcile?
 
@@ -107,6 +121,13 @@ def _main(argv):
     st.add_argument("--state-dir", required=True)
     st.add_argument("--side", required=True, choices=("backend", "app"))
 
+    cf = sub.add_parser("check-fresh")
+    cf.add_argument("--state-dir", required=True)
+    cf.add_argument("--side", required=True, choices=("backend", "app"))
+    cf.add_argument("--git-sha", required=True)
+    cf.add_argument("--dirty", action="store_true",
+                    help="pass when `git status --porcelain` is non-empty")
+
     a = p.parse_args(argv)
     if a.cmd == "write-slice":
         contract = json.load(sys.stdin)
@@ -123,6 +144,10 @@ def _main(argv):
         oh = (other_hash or "none")[:12]
         print(f"{state} other={oh}")
         return STATUS_EXIT[state]
+    if a.cmd == "check-fresh":
+        decision = check_fresh(a.state_dir, a.side, a.git_sha, a.dirty)
+        print(decision)
+        return 0 if decision == "SKIP" else 1
 
 
 if __name__ == "__main__":
