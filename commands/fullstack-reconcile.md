@@ -43,10 +43,14 @@ RECONCILE
 
 ## 3. Write sync.json (single writer = this app session)
 
-Update `.fullstack-sync/sync.json`, preserving `state_dir_abspath` and `owned_files`:
-- `backend_hash_at_sync` = `backend.fp.json.contract_hash`
-- `app_hash_at_sync`     = `app.fp.json.contract_hash`
-- `synced_at`            = current UTC (`date -u +%Y-%m-%dT%H:%M:%SZ`)
+Use the tested helper — it reads both slices, refuses if `--side` isn't `app`, refuses if
+a slice isn't fresh, and writes `backend_hash_at_sync` / `app_hash_at_sync` / `synced_at`
+while preserving `state_dir_abspath` and `owned_files`:
+
+```
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sync_state.py reconcile \
+  --state-dir <state_dir> --side app --now "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+```
 
 ## 4. Confirm
 
