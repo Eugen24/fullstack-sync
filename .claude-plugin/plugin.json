@@ -1,7 +1,7 @@
 {
   "name": "fullstack-sync",
   "description": "Keep a client app and its backend API in sync: detect/fix endpoint-contract drift, scan docs & specs (OpenAPI/GraphQL/proto/route-files), scaffold endpoints across both repos, run and verify both sides. Built for Flutter + FastAPI, stack-agnostic. Safe by default: asks for the dir, then only nudges on contract drift — no tokens or commits unless you allow; hard mode is opt-in autopilot.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": {
     "name": "Eugen Luchian"
   },
