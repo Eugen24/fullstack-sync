@@ -28,9 +28,12 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/sync_state.py check-fresh \
 ```
 
 On `SKIP` the contract can't have changed — stop here. On `DERIVE`, re-derive my contract
-exactly as `api-contract-sync` does (my routes,
-or my calls), build the `{"endpoints":[...]}` input (normalize paths; pass field names
-RAW — the helper normalizes camelCase/snake itself). Then write my slice with the tested
+exactly as `api-contract-sync` does (my routes, or my calls), and build the
+`{"endpoints":[...]}` input (normalize paths; pass field names RAW — the helper normalizes
+camelCase/snake itself). **FastAPI backend shortcut:** for the common case you can derive
+deterministically with `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/extract_fastapi.py <routers-dir>`
+(parses `@router` decorators + `response_model`; falls back to `api-contract-sync` for
+include_router mounting / request bodies / nested models). Then write my slice with the tested
 helper (it hashes + writes the right keys):
 
 ```
