@@ -59,6 +59,22 @@ For building a feature with one session per side at the same time:
    no locks, no orchestrator. See `references/parallel-sync.md`. Once both sides agree, `/fullstack-reconcile`
    (run from the app session) records the reconcile point so later drift is detected.
 
+## Sync levels (safe by default)
+
+`sync_level` in `.fullstack-sync.json` controls the post-change nudge. **Default `low`** —
+the plugin asks for your dirs, then stays quiet until a contract file actually changes; it
+spends no tokens and touches no code or commits unless you accept the nudge.
+
+| Level | Behaviour |
+|-------|-----------|
+| `off` | silent, fully manual |
+| `low` *(default)* | drift-gated Stop hook prints a one-line "contract moved — review?" suggestion; you decide. `/fullstack-sync-review` runs a scoped, lens-selected, report-only review |
+| `hard` | `/fullstack-sync-review --hard` (or the hook in hard mode) reviews both repos across all lenses and can auto-sync + commit — **only on a feature branch; it refuses on master/main** |
+
+FastAPI backends get a precise fingerprint gate; other stacks get a coarser "contract files
+changed" gate until more extractors exist. See
+`docs/superpowers/specs/2026-06-30-sync-level-review-design.md`.
+
 ## Testing
 
 ```
