@@ -1,3 +1,5 @@
 .DS_Store
 *.log
 .fullstack-sync/
+.fullstack-sync.hook.json
+.superpowers/

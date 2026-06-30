@@ -94,9 +94,12 @@ found (never invent paths). Shape:
   },
   "extra_dirs": [],
   "docs": ["routers/<area>.md", "docs/openapi.yaml", "..."],
-  "base_paths": { "v3": "/v3", "v4": "/v4" }
+  "base_paths": { "v3": "/v3", "v4": "/v4" },
+  "sync_level": "low"
 }
 ```
+
+Set `sync_level` to `low` by default (the safe, drift-gated nudge); the user can change it to `off` or `hard` later.
 
 ## Step 5 — Confirm + next steps
 
