@@ -71,8 +71,10 @@ spends no tokens and touches no code or commits unless you accept the nudge.
 | `low` *(default)* | drift-gated Stop hook prints a one-line "contract moved — review?" suggestion; you decide. `/fullstack-sync-review` runs a scoped, lens-selected, report-only review |
 | `hard` | `/fullstack-sync-review --hard` (or the hook in hard mode) reviews both repos across all lenses and can auto-sync + commit — **only on a feature branch; it refuses on master/main** |
 
-FastAPI backends get a precise fingerprint gate; other stacks get a coarser "contract files
-changed" gate until more extractors exist. See
+FastAPI backends get a precise fingerprint gate (nudges only when the contract hash truly
+moves, and stays quiet on comment-only edits to a route file). Other stacks get a coarser
+"contract files changed" gate until more extractors exist — it can't confirm the hash
+moved, so it re-nudges each turn a contract file shows as changed, until you act. See
 `docs/superpowers/specs/2026-06-30-sync-level-review-design.md`.
 
 ## Testing
