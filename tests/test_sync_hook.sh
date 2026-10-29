@@ -78,6 +78,18 @@ PY
 OUT="$(run)"
 echo "$OUT" | grep -q "FIELD .*ghost_key" && ok "nudge_lists_field_drift" || bad "nudge_lists_field_drift"
 
+# request-body drift appears in the nudge
+mkdir -p "$W/lib"
+cat >> "$W/routers/users.py" <<'PY'
+class OrderIn(BaseModel):
+    qty: int
+@router.post("/{id}/orders2")
+def orders2(id: int, body: OrderIn): ...
+PY
+printf "Future<void> c() => dio.post('/v3/users/\$id/orders2', data: {'quantity': 1});\n" > "$W/lib/api.dart"
+OUT="$(run)"
+echo "$OUT" | grep -q "BODY .*quantity" && ok "nudge_lists_body_drift" || bad "nudge_lists_body_drift"
+
 # off level → silent even with a change
 python3 - "$W/.fullstack-sync.json" <<'PY'
 import json,sys

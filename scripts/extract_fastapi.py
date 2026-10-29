@@ -51,6 +51,33 @@ def _field_names(cls):
     return out
 
 
+_NON_BODY = {"Depends", "Query", "Path", "Header", "Cookie", "Form", "File", "Security", "UploadFile", "Request"}
+
+
+def _required_fields(cls):
+    """[[spellings]] of fields a client must send: no default, not Optional/None, Field() without
+    default. A field with Field(alias=...) can be satisfied by either spelling."""
+    out = []
+    for n in cls.body:
+        if not (isinstance(n, ast.AnnAssign) and isinstance(n.target, ast.Name)):
+            continue
+        spell = [n.target.id]
+        required = n.value is None
+        if isinstance(n.value, ast.Call):
+            kws = {kw.arg: kw.value for kw in n.value.keywords}
+            spell += [kws[k].value for k in _ALIAS_KW if k in kws and isinstance(kws[k], ast.Constant)]
+            if getattr(n.value.func, "id", getattr(n.value.func, "attr", "")) == "Field":
+                has_default = "default" in kws or "default_factory" in kws or (
+                    n.value.args and not (isinstance(n.value.args[0], ast.Constant) and n.value.args[0].value is Ellipsis))
+                required = not has_default
+        elif isinstance(n.value, ast.Constant) and n.value.value is Ellipsis:
+            required = True
+        text = ast.unparse(n.annotation)
+        if required and "None" not in text and "Optional" not in text:
+            out.append(spell)
+    return out
+
+
 def _model_fields(tree):
     """Map each class name -> its top-level annotated field names."""
     return {n.name: _field_names(n) for n in ast.walk(tree) if isinstance(n, ast.ClassDef)}
@@ -67,7 +94,7 @@ def registry(trees):
     for tree in trees:
         for n in ast.walk(tree):
             if isinstance(n, ast.ClassDef):
-                reg[n.name] = {"bases": _base_names(n), "fields": _field_names(n)}
+                reg[n.name] = {"bases": _base_names(n), "fields": _field_names(n), "required": _required_fields(n)}
     return reg
 
 
@@ -81,6 +108,49 @@ def resolve_fields(name, reg, _seen=None):
     for b in reg[name]["bases"]:
         out |= resolve_fields(b, reg, seen)
     return out
+
+
+def resolve_required(name, reg, _seen=None):
+    """Required-field spellings including inherited ones."""
+    seen = _seen if _seen is not None else set()
+    if name in seen or name not in reg:
+        return []
+    seen.add(name)
+    out = list(reg[name]["required"])
+    for b in reg[name]["bases"]:
+        out += resolve_required(b, reg, seen)
+    return out
+
+
+def _direct_model(ann, reg):
+    """The model of a body parameter annotation: X, Optional[X] or X | None. A List[X] body is a
+    JSON array, which a key-by-key comparison cannot judge, so it is not a request model."""
+    if isinstance(ann, ast.Name):
+        return ann.id if ann.id in reg else None
+    if isinstance(ann, ast.Attribute):
+        return ann.attr if ann.attr in reg else None
+    if isinstance(ann, ast.Subscript) and getattr(ann.value, "id", "") == "Optional":
+        return _direct_model(ann.slice, reg)
+    if isinstance(ann, ast.BinOp):
+        return _direct_model(ann.left, reg) or _direct_model(ann.right, reg)
+    return None
+
+
+def _request_model(fn, reg):
+    """First parameter that FastAPI treats as the JSON body: a Pydantic model that is not
+    Depends/Query/Path/Header/... Returns its name or None."""
+    a = fn.args
+    pos = a.posonlyargs + a.args
+    defaults = [None] * (len(pos) - len(a.defaults)) + list(a.defaults)
+    for arg, dflt in list(zip(pos, defaults)) + list(zip(a.kwonlyargs, a.kw_defaults)):
+        if arg.annotation is None:
+            continue
+        if isinstance(dflt, ast.Call) and getattr(dflt.func, "id", getattr(dflt.func, "attr", "")) in _NON_BODY - {"Body"}:
+            continue
+        m = _direct_model(arg.annotation, reg)
+        if m:
+            return m
+    return None
 
 
 def _model_in(expr, reg):
@@ -135,12 +205,16 @@ def extract_file(path, reg=None, mount=""):
             expr = next((kw.value for kw in dec.keywords if kw.arg == "response_model"), None)
             model = _model_in(expr, reg) if expr is not None else (
                 _model_in(node.returns, reg) if node.returns is not None else None)
+            req = _request_model(node, reg)
             eps.append({
                 "method": dec.func.attr.upper(),
                 "path": _norm_path(prefix + sub_path),
                 "fields": sorted(resolve_fields(model, reg)) if model else [],
                 "model": model,
                 "file": path,
+                "request_model": req,
+                "request_fields": sorted(resolve_fields(req, reg)) if req else [],
+                "request_required": resolve_required(req, reg) if req else [],
             })
     return eps
 

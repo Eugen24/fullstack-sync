@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.0
+- **Request-body check (`BODY`):** for POST/PUT/PATCH calls with an inline JSON map, fails when the app sends a key the backend's request model does not declare (Pydantic drops it silently) or omits a field the model requires. Request models resolve like response models (inheritance, `Optional[X]`, `Field(alias=...)`; `Depends/Query/Path/...` params are not bodies; list bodies are not judged). OpenAPI `requestBody` is supported. `--no-body` turns it off.
+- Findings are now per call site: one path used with several verbs keeps each verb's model and body, and a `METHOD` finding no longer hides the other sites' `FIELD`/`BODY` findings.
+- Fixed in audits on real apps: ternary values (`'platform': isIOS ? 'ios' : ...`) were read as body keys; `if (x) 'k': v` entries lost their `if`.
+- Mutation-tested on copies of real apps (renamed body key, path typo, verb change, renamed model key): each is reported with the exact call site; unmutated apps stay at 0 findings.
+
 ## 0.6.0
 - **Per-endpoint field check (`FIELD`):** links each HTTP call to the `Model.fromJson` that parses it and to the backend response model for that endpoint. Fails only for a non-null cast the backend does not declare; reads the scan cannot prove required are `FIELD?` review items. Dict-returning endpoints are skipped, never guessed.
 - **Dart constants resolved** (`'$v4/x'` with `const v4 = '/v4'`), and trailing `$path`-style dynamic segments are checked as a prefix (`DYNAMIC`).

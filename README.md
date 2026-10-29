@@ -96,10 +96,10 @@ moved, so it re-nudges each turn a contract file shows as changed, until you act
 
 ## CI drift gate (no Claude, no tokens)
 
-`scripts/drift_check.py` checks the contract on every run: **paths, HTTP methods and response fields**.
+`scripts/drift_check.py` checks the contract on every run: **paths, HTTP methods, response fields and request bodies**.
 
 ```
-python3 scripts/drift_check.py                       # PATH, METHOD, per-endpoint FIELD
+python3 scripts/drift_check.py                       # PATH, METHOD, per-endpoint FIELD, BODY
 python3 scripts/drift_check.py --fields              # + FIELD? review list
 python3 scripts/drift_check.py --strict-fields       # FIELD? findings fail the run too
 python3 scripts/drift_check.py --openapi spec.json   # backend from an OpenAPI file
@@ -111,11 +111,12 @@ python3 scripts/drift_check.py --json --warn         # machine output, never fai
 | `PATH` | the app calls a path no backend route serves | yes |
 | `METHOD` | the path exists, but not with the verb the app uses (`.get/.post/...`) | yes |
 | `FIELD` | per endpoint: the app parses the response with `Model.fromJson` and reads a key with a non-null cast (`j['id'] as String`, which throws when absent) that the backend's response model for that endpoint does not declare | yes |
+| `BODY` | POST/PUT/PATCH with an inline JSON map (`data: {'k': v}`): the app sends a key the backend's request model does not declare (Pydantic drops it silently), or leaves out a field the model requires (a 422 at runtime). Judged only when the whole map is visible (no `...spread`) and the backend model resolves; keys under `if (...)` count as sent | yes |
 | `FIELD?` | review item: a key the app reads that the backend response model lacks but the app may tolerate (`?? x`, wrappers), or (loose, `--fields`) a name the backend never mentions anywhere | only with `--strict-fields` |
 | `DYNAMIC` | info: a path built from a runtime variable (`'$base/v4/$path'`), checked only as a prefix | no |
 
 Exit `0` clean, `1` drift, `2` bad input. The Stop hook runs the same check and puts the concrete
-`PATH`/`METHOD`/`FIELD` lines in its nudge, so what you see is always against the current code.
+`PATH`/`METHOD`/`FIELD`/`BODY` lines in its nudge, so what you see is always against the current code.
 
 How it resolves things, so findings are about the contract and not about plumbing:
 - **Dart constants:** `static const v4 = '/v4'; '$v4/app_feedback'` becomes `/v4/app_feedback`.
@@ -128,8 +129,9 @@ How it resolves things, so findings are about the contract and not about plumbin
 
 What it still cannot see:
 - A prefix present on only one side is tolerated, so it can miss a drift but should not invent one.
-- Nested response fields are not flattened; request bodies are not compared per endpoint; no multi-level
-  router-in-router chains.
+- Nested response/request fields are not flattened; no multi-level router-in-router chains.
+- Request bodies built from a variable (`data: payload.toJson()`) or a list are not seen, only inline maps. `Optional[X]`
+  fields without a default are treated as not required (Pydantic v1 vs v2 differ), so a missing one is never reported.
 - Whether the app *handles* a missing key: only a plain non-null cast counts as required.
 - Dynamic paths beyond a trailing `$path`-style variable. Opt out of a call with `// fss-ignore`, or list paths in
   `"drift_ignore": ["/v4/remo/{id}"]` in `.fullstack-sync.json`.
@@ -153,7 +155,7 @@ tested `scripts/sync_state.py`; the model only does contract *extraction*.
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md). Latest: **v0.6.0**, the drift check resolves Dart constants, cross-file backend models and router prefixes, and checks fields per endpoint. v0.4.0 added the CI gate; v0.3.1 made the Stop hook about 10x faster.
+See [CHANGELOG.md](CHANGELOG.md). Latest: **v0.7.0**, the drift check also compares request bodies (`BODY`), per call site. v0.4.0 added the CI gate; v0.3.1 made the Stop hook about 10x faster.
 
 ## Contributing
 

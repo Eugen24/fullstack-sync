@@ -269,6 +269,106 @@ def test_cli_strict_fields_gate():
         shutil.rmtree(w)
 
 
+
+def test_body_keys_parser_real_world_shapes():
+    # shapes taken from real apps: ternary values must not become keys (a bug found auditing mystartup)
+    t = ("post(uri('/v1/auth/anonymous'), body: jsonEncode({'installation_id': id, 'platform': Platform.isIOS ? 'ios' : "
+         "Platform.isMacOS ? 'macos' : 'x', if (att != null) 'attestation': att}))")
+    b = dc.body_keys(t)
+    assert b == {"keys": {"installation_id", "platform", "attestation"}, "conditional": {"attestation"}, "complete": True}, b
+    b = dc.body_keys("_dio.post('/x', data: {'a': 1, 'b': {'c': 2}, 'l': [1, 2], 'f': foo(1, 'z': 3), 'createdAt': now})")
+    assert b["keys"] == {"a", "b", "l", "f", "created_at"} and b["complete"]      # nested keys excluded, snake-normalised
+    assert dc.body_keys("_dio.post('/x', data: {...base, 'a': 1})")["complete"] is False
+    assert dc.body_keys("_dio.post('/x', data: payload.toJson())") is None
+    assert dc.body_keys("_dio.get('/x')") is None
+    assert dc.body_keys("_dio.post('/x', data: {'a': 1") is None                    # unbalanced: never guess
+
+
+def _bop(fields, required=(), model="OrderIn"):
+    return {"fields": None, "model": None, "req_fields": set(fields), "req_required": [list(r) for r in required], "req_model": model}
+
+
+def _bcall(keys, cond=(), complete=True):
+    return {"loc": "a:1", "methods": {"POST"}, "model": None, "dynamic": False,
+            "body": {"keys": set(keys), "conditional": set(cond), "complete": complete}}
+
+
+def test_check_body_extra_and_missing_required():
+    routes = {"/o": {"POST": _bop({"qty", "note"}, [["qty"]])}}
+    ok = dc.check({"/o": _bcall({"qty", "note"})}, routes)
+    assert ok == []
+    extra = dc.check({"/o": _bcall({"qty", "qtty"})}, routes)
+    assert [(k, "qtty" in d and "dropped" in d) for k, _, d, _ in extra] == [("BODY", True)]
+    missing = dc.check({"/o": _bcall({"note"})}, routes)
+    assert [(k, "qty" in d and "requires" in d) for k, _, d, _ in missing] == [("BODY", True)]
+    assert dc.check({"/o": _bcall({"note"}, complete=False)}, routes) == []          # spread: missing not judged
+    assert dc.check({"/o": _bcall({"qty"}, cond={"qty"})}, routes) == []              # conditional key counts as sent
+    assert dc.check({"/o": _bcall({"qty", "qtty"})}, routes, body=False) == []
+    # alias pair satisfied by either spelling
+    r2 = {"/o": {"POST": _bop({"code", "promo_code"}, [["code", "promo_code"]])}}
+    assert dc.check({"/o": _bcall({"promo_code"})}, r2) == []
+    # unknown request schema, GET, and ambiguous multi-op matches are never judged
+    assert dc.check({"/o": _bcall({"zzz"})}, {"/o": {"POST": {"fields": None, "model": None, "req_fields": None}}}) == []
+    get = _bcall({"zzz"}); get["methods"] = {"GET"}
+    assert dc.check({"/o": get}, {"/o": {"GET": _bop({"a"})}}) == []
+
+
+def test_cli_body_drift_end_to_end():
+    be = ("class OrderIn(BaseModel):\n    qty: int\n    note: str | None = None\n"
+          "router = APIRouter(prefix='/v1')\n@router.post('/orders')\ndef c(body: OrderIn): ...\n")
+    good = "Future<void> c() => _dio.post('/v1/orders', data: {'qty': 1, 'note': n});\n"
+    typo = "Future<void> c() => _dio.post('/v1/orders', data: {'quantity': 1});\n"
+    w = _repo({"lib/api.dart": good}, backend_src=be)
+    try:
+        assert _run(w)[0] == 0
+    finally:
+        shutil.rmtree(w)
+    w = _repo({"lib/api.dart": typo}, backend_src=be)
+    try:
+        rc, out, _ = _run(w)
+        assert rc == 1 and out.count("BODY") == 2 and "quantity" in out and "requires" in out, out
+        assert _run(w, "--no-body")[0] == 0
+        assert _run(w, "--warn")[0] == 0
+    finally:
+        shutil.rmtree(w)
+
+
+def test_openapi_request_body_fields_and_required():
+    w = tempfile.mkdtemp()
+    try:
+        spec = {"paths": {"/o": {"post": {"requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/In"}}}},
+                                          "responses": {"200": {"description": "ok"}}}}},
+                "components": {"schemas": {"In": {"properties": {"qty": {}, "noteText": {}}, "required": ["qty"]}}}}
+        p = os.path.join(w, "s.json"); json.dump(spec, open(p, "w"))
+        routes, _ = dc.backend_from_openapi(p)
+        info = routes["/o"]["POST"]
+        assert info["req_fields"] == {"qty", "note_text"} and info["req_required"] == [["qty"]]
+        assert [k for k, *_ in dc.check({"/o": _bcall({"qty", "nope"})}, routes)] == ["BODY"]
+    finally:
+        shutil.rmtree(w)
+
+
+
+def test_one_path_many_verbs_keeps_model_and_body_per_call_site():
+    # real shape from a mutation audit: GET /me parsed as User, PATCH /me sends a body, DELETE /me plain
+    dart = ("Future<User> me() async => User.fromJson(_m(await dio.get('/me')));\n"
+            "Future<void> upd() => dio.patch('/me', data: {'name': n, 'bogus': 1});\n"
+            "Future<void> del() => dio.delete('/me');\n")
+    user = "class User {\n  factory User.fromJson(Map<String, dynamic> j) => User(id: j['idd'] as String);\n}\n"
+    w = _repo({"lib/api.dart": dart, "lib/user.dart": user},
+              backend_src=("class UserOut(BaseModel):\n    id: str\nclass UserPatch(BaseModel):\n    name: str | None = None\n"
+                           "router = APIRouter()\n@router.get('/me', response_model=UserOut)\ndef g(): ...\n"
+                           "@router.patch('/me')\ndef u(b: UserPatch): ...\n@router.delete('/me')\ndef d(): ...\n"))
+    try:
+        rc, out, _ = _run(w)
+        assert rc == 1, out
+        assert "FIELD " in out and "idd" in out and "GET User.fromJson" in out, out     # GET site keeps its model
+        assert "BODY" in out and "bogus" in out and "PATCH" in out, out                 # PATCH site keeps its body
+        assert out.count("METHOD") == 0
+    finally:
+        shutil.rmtree(w)
+
+
 def test_cli_openapi_source():
     w = _repo({"lib/api.dart": "void a() => _dio.post('/v1/ping');\n"})
     try:

@@ -59,7 +59,7 @@ fi
 
 FILES="$(printf '%s' "$MATCHED" | tr '\n' ' ')"
 # Concrete findings beat "review?": path/method drift now, within a small time budget.
-DRIFT="$(python3 "$PLUGIN/scripts/drift_check.py" --config "$CFG" --warn --max-seconds 4 2>/dev/null | grep -E '^(PATH|METHOD|FIELD) ' | head -3 | cut -c1-200)"
+DRIFT="$(python3 "$PLUGIN/scripts/drift_check.py" --config "$CFG" --warn --max-seconds 4 2>/dev/null | grep -E '^(PATH|METHOD|FIELD|BODY) ' | head -3 | cut -c1-200)"
 if [ "$LEVEL" = "hard" ]; then
   echo "fullstack-sync: contract moved ($FILES) — hard mode: run /fullstack-sync-review --hard (auto sync+commit, feature branch only)."
 else

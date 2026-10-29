@@ -2,7 +2,7 @@
 """Contract drift gate for CI and the Stop hook: paths, HTTP methods, response fields.
 
   drift_check.py [--config .fullstack-sync.json] [--openapi spec.json] [--fields]
-                 [--strict-fields] [--no-endpoint-fields] [--json] [--warn] [--max-seconds N]
+                 [--strict-fields] [--no-endpoint-fields] [--no-body] [--json] [--warn] [--max-seconds N]
 
 App side (string-constant clients): API literals in app.endpoints_file (every literal) and
 app.services_glob (only literals inside an HTTP call, so UI routes are ignored). Dart string
@@ -18,14 +18,18 @@ Findings
           responses are skipped, never guessed. Reads the scan cannot prove required (`?? x`,
           wrappers, `final r = j['k']`) are reported as FIELD? instead
   FIELD?  (--fields) loose review list: an app key that no backend model/dict declares anywhere
+  BODY    POST/PUT/PATCH with an inline JSON map (`data: {'k': v}`): the app sends a key the backend's
+          request model does not declare (Pydantic drops it silently), or leaves out a field the
+          model requires (a 422 at runtime). Judged only when the map is fully visible (no `...spread`)
+          and the backend model resolves; keys under `if (...)` count as sent
   DYNAMIC (info) a path built from a runtime variable ('$base/v4/$path'); checked only as a prefix
 
-Exit 0 clean, 1 drift (PATH/METHOD/FIELD; FIELD? only with --strict-fields), 2 bad input.
+Exit 0 clean, 1 drift (PATH/METHOD/FIELD/BODY; FIELD? only with --strict-fields), 2 bad input.
 --warn: report but exit 0. Opt-outs: `// fss-ignore` on a call line (or alone on the line above),
 or "drift_ignore": ["/v4/remo/{id}"] in the config. Config may set backend.prefix_rule
 ({"from_path": "routers", "skip": ["root"]}) for backends that mount routers by directory.
-Limits: nested response fields are not flattened; no multi-level router chains; request bodies
-are not compared per endpoint.
+Limits: nested fields are not flattened; no multi-level router chains; bodies built from a
+variable (`data: payload.toJson()`) are not seen, only inline maps.
 """
 import argparse, glob, json, os, re, sys
 
@@ -149,7 +153,8 @@ def app_calls(files, strict_files=(), consts=None):
                 if not lit:
                     continue
                 path, dynamic = lit
-                e = out.setdefault(norm(path), {"loc": f"{f}:{n}", "methods": set(), "model": None, "dynamic": dynamic})
+                e = out.setdefault(norm(path), {"loc": f"{f}:{n}", "methods": set(), "model": None,
+                                                "dynamic": dynamic, "body": None, "sites": []})
                 e["dynamic"] = e["dynamic"] and dynamic
                 same = line[:m.start()].rsplit(";", 1)[-1]
                 found = _VERB.findall(same)
@@ -160,14 +165,66 @@ def app_calls(files, strict_files=(), consts=None):
                         found = _VERB.findall(chunk)
                         if found:
                             break
-                if found:
-                    e["methods"].add(found[-1].upper())
-                if e["model"] is None:
-                    stmt = "\n".join(lines[n - 1:n + 5]).split(";", 1)[0]
-                    u = _FROMJSON_USE.search(same + " " + stmt) or _FROMJSON_USE.search(" ".join(window))
-                    if u:
-                        e["model"] = u.group(1)
+                verb = found[-1].upper() if found else None
+                if verb:
+                    e["methods"].add(verb)
+                tail_text = line[m.end():] + "\n" + "\n".join(lines[n:n + 40])
+                body = body_keys(tail_text.split(";", 1)[0])
+                stmt = "\n".join(lines[n - 1:n + 5]).split(";", 1)[0]
+                u = _FROMJSON_USE.search(same + " " + stmt) or _FROMJSON_USE.search(" ".join(window))
+                model = u.group(1) if u else None
+                e["sites"].append({"verb": verb, "model": model, "body": body, "loc": f"{f}:{n}"})
+                e["model"] = e["model"] or model
+                e["body"] = e["body"] or body
     return out
+
+
+def body_keys(stmt):
+    """Keys of an inline JSON map passed as `data:` / `body:` (optionally in jsonEncode(...)).
+
+    Returns {"keys": set, "conditional": set, "complete": bool} or None when there is none.
+    Only the outermost map's own keys count (nested maps/lists/calls are blanked out); keys under
+    `if (...)` are conditional; a `...spread` makes the key set incomplete."""
+    m = re.search(r"\b(?:data|body)\s*:\s*(?:jsonEncode\(\s*)?\{", stmt)
+    if not m:
+        return None
+    depth, quote, top, i = 0, None, [], m.end() - 1
+    while i < len(stmt):
+        ch = stmt[i]
+        if quote:
+            top.append(ch if depth == 1 else " ")
+            if ch == "\\":
+                i += 1
+                if depth == 1 and i < len(stmt):
+                    top.append(stmt[i])
+            elif ch == quote:
+                quote = None
+        elif ch in "'\"":
+            quote = ch
+            top.append(ch if depth == 1 else " ")
+        elif ch in "({[":
+            depth += 1
+            top.append(ch if depth <= 2 else " ")  # keep the opener so `if (` stays recognisable
+        elif ch in ")}]":
+            if depth == 1 and ch == "}":
+                break
+            depth -= 1
+            top.append(ch if depth == 1 else " ")
+        else:
+            top.append(ch if depth == 1 else " ")
+        i += 1
+    else:
+        return None  # unbalanced: do not guess
+    flat = "".join(top)
+    keys, cond = set(), set()
+    for entry in flat.split(","):
+        # a key opens its entry: `'k': v` or `if (c) 'k': v`; later 'x' : in a ternary is a value
+        km = re.match(r"""[\s{]*((?:if|for)\s*\([^)]*\)\s*)?['"]([A-Za-z0-9_]+)['"]\s*:""", entry)
+        if km:
+            keys.add(normalize_field(km.group(2)))
+            if km.group(1):
+                cond.add(normalize_field(km.group(2)))
+    return {"keys": keys, "conditional": cond, "complete": "..." not in flat}
 
 
 def _call_body(lines, i):
@@ -223,6 +280,21 @@ def _schema_fields(schema, spec, depth=0):
     return out if found else None
 
 
+def _schema_required(schema, spec, depth=0):
+    """Required property names of an OpenAPI request schema ($ref/allOf unwrapped)."""
+    if not isinstance(schema, dict) or depth > 6:
+        return []
+    if "$ref" in schema:
+        node = spec
+        for part in schema["$ref"].lstrip("#/").split("/"):
+            node = node.get(part, {}) if isinstance(node, dict) else {}
+        return _schema_required(node, spec, depth + 1)
+    out = [[normalize_field(r)] for r in schema.get("required", [])]
+    for sub in schema.get("allOf", []):
+        out += _schema_required(sub, spec, depth + 1)
+    return out
+
+
 def backend_from_openapi(path):
     spec = json.load(open(path))
     routes = {}
@@ -236,7 +308,11 @@ def backend_from_openapi(path):
                     sch = resp.get("content", {}).get("application/json", {}).get("schema")
                     fields = _schema_fields(sch, spec) if sch else None
                     break
-            routes.setdefault(norm(p), {})[m.upper()] = {"fields": fields, "model": None}
+            req = op.get("requestBody", {}).get("content", {}).get("application/json", {}).get("schema")
+            routes.setdefault(norm(p), {})[m.upper()] = {
+                "fields": fields, "model": None,
+                "req_fields": _schema_fields(req, spec) if req else None,
+                "req_required": _schema_required(req, spec) if req else [], "req_model": None}
     universe = set()
     for sch in spec.get("components", {}).get("schemas", {}).values():
         universe.update(normalize_field(k) for k in sch.get("properties", {}))
@@ -247,7 +323,11 @@ def backend_from_fastapi(root, max_seconds, want_universe, prefix_rule=None):
     routes = {}
     for e in extract_fastapi.extract([root], max_seconds=max_seconds, prefix_rule=prefix_rule)["endpoints"]:
         fields = {normalize_field(f) for f in e["fields"]} if e.get("model") else None
-        routes.setdefault(norm(e["path"]), {})[e["method"]] = {"fields": fields, "model": e.get("model")}
+        routes.setdefault(norm(e["path"]), {})[e["method"]] = {
+            "fields": fields, "model": e.get("model"),
+            "req_fields": {normalize_field(f) for f in e["request_fields"]} if e.get("request_model") else None,
+            "req_required": [[normalize_field(x) for x in grp] for grp in e.get("request_required", [])],
+            "req_model": e.get("request_model")}
     universe = ({normalize_field(f) for f in extract_fastapi.all_model_fields([root], max_seconds=max_seconds)}
                 if want_universe else set())
     return routes, universe
@@ -268,7 +348,37 @@ def _under(prefix, routes):
     return [b for b in routes if needle in "/" + "/".join(_segs(b)) + "/"]
 
 
-def check(calls, routes, ignore=(), models=None):
+def _sites(e):
+    """Call sites of a path; entries built by hand (tests) get one synthesised from their fields."""
+    if "sites" in e:
+        return e["sites"]
+    verb = next(iter(e["methods"])) if len(e["methods"]) == 1 else None
+    return [{"verb": verb, "model": e.get("model"), "body": e.get("body"), "loc": e["loc"]}]
+
+
+def check_body(p, e, verb, infos):
+    """BODY findings for one POST/PUT/PATCH call against its backend operation(s)."""
+    body = e.get("body")
+    if not body or not body["keys"] or verb not in ("POST", "PUT", "PATCH"):
+        return []
+    infos = [i for i in infos if i.get("req_fields") is not None]
+    if not infos:
+        return []
+    known = set().union(*(i["req_fields"] for i in infos))
+    bm = "/".join(sorted({i["req_model"] for i in infos if i.get("req_model")})) or "the request schema"
+    out = []
+    extra = sorted(body["keys"] - known)
+    if extra:
+        out.append(("BODY", p, f"{verb} sends {', '.join(extra)}; {bm} declares no such field (dropped silently)", e["loc"]))
+    if body["complete"] and len(infos) == 1:
+        sent = body["keys"]
+        miss = sorted("/".join(sorted(set(g))) for g in infos[0]["req_required"] if not (set(g) & sent))
+        if miss:
+            out.append(("BODY", p, f"{verb} does not send {', '.join(miss)}; {bm} requires it", e["loc"]))
+    return out
+
+
+def check(calls, routes, ignore=(), models=None, body=True):
     """[(kind, path, detail, loc)] for PATH / METHOD / FIELD drift (+ DYNAMIC info)."""
     segs = {p: _segs(p) for p in calls}
     def is_base(p):
@@ -295,19 +405,22 @@ def check(calls, routes, ignore=(), models=None):
         bad = e["methods"] - served
         if bad and served:
             out.append(("METHOD", p, f"app uses {'/'.join(sorted(bad))}, backend serves {'/'.join(sorted(served))}", e["loc"]))
-            continue
-        model = e.get("model")
-        if model and models and models.get(model) and len(e["methods"]) == 1:
-            verb = next(iter(e["methods"]))
+        for site in _sites(e):
+            verb = site["verb"]
+            if not verb:
+                continue
             infos = [routes[b][verb] for b in hit if verb in routes[b]]
-            if infos and all(i["fields"] is not None for i in infos):
+            if body:
+                out += check_body(p, site, verb, infos)
+            model = site["model"]
+            if model and models and models.get(model) and infos and all(i["fields"] is not None for i in infos):
                 known = set().union(*(i["fields"] for i in infos))
                 bm = "/".join(sorted({i["model"] for i in infos if i["model"]})) or "its response"
                 for req, kind, note in ((True, "FIELD", "declares no such field"),
                                         (False, "FIELD?", "declares no such field (the app may tolerate its absence: not a plain non-null cast)")):
                     miss = sorted(k for k, i in models[model].items() if k not in known and i["required"] == req)
                     if miss:
-                        out.append((kind, p, f"{verb} {model}.fromJson reads {', '.join(miss)}; {bm} {note}", e["loc"]))
+                        out.append((kind, p, f"{verb} {model}.fromJson reads {', '.join(miss)}; {bm} {note}", site["loc"]))
     return out
 
 
@@ -347,6 +460,7 @@ def main(argv=None):
     ap.add_argument("--fields", action="store_true", help="also print the loose FIELD? review list")
     ap.add_argument("--strict-fields", action="store_true", help="FIELD? findings fail the run (implies --fields)")
     ap.add_argument("--no-endpoint-fields", action="store_true", help="skip the per-endpoint FIELD check")
+    ap.add_argument("--no-body", action="store_true", help="skip the request-body (BODY) check")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--warn", action="store_true", help="report drift but exit 0")
     ap.add_argument("--max-seconds", type=float, default=30)
@@ -376,14 +490,14 @@ def main(argv=None):
         print("drift_check: backend exposes no endpoints; check backend.root or --openapi", file=sys.stderr)
         return 2
     findings = check(calls, routes, {norm(x) for x in cfg.get("drift_ignore", [])},
-                     None if a.no_endpoint_fields else models)
+                     None if a.no_endpoint_fields else models, not a.no_body)
     if loose:
         extra, note = check_fields(keys, universe) if universe else ([], "no backend names found; FIELD? checks skipped")
         findings += extra
         if note:
             print(f"drift_check: {note}", file=sys.stderr)
     shown = [f for f in findings if f[0] != "FIELD?" or loose]
-    hard = [f for f in shown if f[0] in ("PATH", "METHOD", "FIELD") or (f[0] == "FIELD?" and a.strict_fields)]
+    hard = [f for f in shown if f[0] in ("PATH", "METHOD", "FIELD", "BODY") or (f[0] == "FIELD?" and a.strict_fields)]
     if a.json:
         print(json.dumps({"app_paths": len(calls), "backend_paths": len(routes), "app_fields": len(keys),
                           "findings": [{"kind": k, "path": p, "detail": d, "at": l} for k, p, d, l in shown]}))

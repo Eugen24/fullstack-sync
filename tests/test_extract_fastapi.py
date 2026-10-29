@@ -243,6 +243,32 @@ def test_universe_is_every_name_the_backend_mentions():
         shutil.rmtree(tmp)
 
 
+
+def test_request_model_detection_and_required_fields():
+    tmp = _tree_dir({"r.py": (
+        "class Base(BaseModel):\n    name: str\n"
+        "class OrderIn(Base):\n    qty: int\n    note: str | None = None\n"
+        "    code: str = Field(alias='promoCode')\n    opt: int = 5\n    must: int = Field(...)\n"
+        "    soft: int = Field(default=1)\n    maybe: Optional[str]\n"
+        "router = APIRouter()\n"
+        "@router.post('/o')\ndef o(body: OrderIn, db=Depends(get_db), q: Filters = Depends()): ...\n"
+        "@router.put('/p')\ndef p(item_id: int, payload: Optional[OrderIn] = None): ...\n"
+        "@router.post('/l')\ndef l(items: List[OrderIn]): ...\n"
+        "@router.get('/g')\ndef g(q: OrderIn = Query()): ...\n")})
+    try:
+        eps = extract_fastapi.extract([tmp])["endpoints"]
+        o = _by(eps, "POST", "/o")
+        assert o["request_model"] == "OrderIn"
+        assert {"qty", "name", "note", "opt", "must", "soft", "code", "promoCode", "maybe"} <= set(o["request_fields"])
+        req = sorted(sorted(g) for g in o["request_required"])
+        assert req == [["code", "promoCode"], ["must"], ["name"], ["qty"]], req   # alias pair; Optional/default are not required
+        assert _by(eps, "PUT", "/p")["request_model"] == "OrderIn"                 # Optional[X] still a body
+        assert _by(eps, "POST", "/l")["request_model"] is None                     # a JSON array body is not judged key by key
+        assert _by(eps, "GET", "/g")["request_model"] is None                      # Query()/Depends() are not bodies
+    finally:
+        shutil.rmtree(tmp)
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0
