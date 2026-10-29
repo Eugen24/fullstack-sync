@@ -1,5 +1,12 @@
 # fullstack-sync
 
+[![tests](https://github.com/Eugen24/fullstack-sync/actions/workflows/test.yml/badge.svg)](https://github.com/Eugen24/fullstack-sync/actions/workflows/test.yml)
+[![release](https://img.shields.io/github/v/release/Eugen24/fullstack-sync)](https://github.com/Eugen24/fullstack-sync/releases)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-8A63D2)
+
+**A Claude Code plugin that stops your app and your API from drifting apart.**
+
 Keep a client app and its backend API in lockstep. Catches the exact class of
 bug where the app calls an endpoint the backend doesn't expose (or vice-versa),
 field names drift, or a method/path disagrees — and fixes the named side.
@@ -7,6 +14,14 @@ field names drift, or a method/path disagrees — and fixes the named side.
 Stack-agnostic; tuned for **Flutter + FastAPI** (the layout it was built
 against) but detects Node/Django/Go/Rails on the backend and Flutter/RN/web on
 the client.
+
+## Why
+
+The classic full-stack bug: the app calls `/v3/users/{id}/orders`, the backend serves
+`/v3/users/{id}/order`. Types compile, tests pass, and it 404s in production.
+fullstack-sync diffs the app's endpoint constants and services against the backend's
+routes and schemas, names the side that is wrong, and fixes it. Nothing runs and no
+tokens are spent until a contract file actually changes.
 
 ## Install
 
@@ -89,6 +104,14 @@ single-writer reconcile, drift status), and an end-to-end `test_protocol.sh` tha
 two real git repos through init → slice → reconcile → drift via the `sync_state` CLI. Runs
 in CI on every push/PR (`.github/workflows/test.yml`). The mechanical state ops live in the
 tested `scripts/sync_state.py`; the model only does contract *extraction*.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md). Latest: **v0.3.1**, the drift-check Stop hook now takes about a second instead of up to 14 on backends with a virtualenv.
+
+## Contributing
+
+Issues and PRs welcome. Run `bash tests/run.sh` (python3 + git only) before opening a PR.
 
 ## Why it exists
 

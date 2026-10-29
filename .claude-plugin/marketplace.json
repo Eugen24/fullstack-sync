@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "neo-plugins",
-  "description": "Eugen's local Claude Code plugins.",
+  "description": "Claude Code plugins by Eugen Luchian: fullstack-sync keeps your app and backend API in sync.",
   "owner": {
     "name": "Eugen Luchian"
   },
