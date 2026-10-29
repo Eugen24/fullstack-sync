@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0
+- New `scripts/drift_check.py`: a CI drift gate that needs no Claude. Fails when the app calls a path the backend does not serve; backend from the FastAPI extractor or an OpenAPI file (`--openapi`). Exit 0/1/2, `--json`, `--warn`.
+- Example GitHub Actions workflow in `docs/examples/drift-gate.yml`.
+- Tests for path normalisation, prefix tolerance, call-context filtering and the CLI exit codes.
+
 ## 0.3.1
 - Fix: the drift-check Stop hook no longer walks `.venv`, `.git`, `node_modules`, caches or worktrees. On real FastAPI backends this took 8 to 14 s and often hit the hook timeout; it now takes about 0.1 to 1 s with identical output.
 - Extractor skips files it cannot parse instead of failing, and takes a `--max-seconds` budget (the hook uses 6 s and falls back to a coarse nudge).

@@ -1,0 +1,30 @@
+# Copy to .github/workflows/drift-gate.yml in your APP repo. Needs no Claude and no tokens.
+# Checks out the app and the backend side by side, then fails the PR if the app calls a
+# path the backend does not serve.
+name: drift-gate
+on: pull_request
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { path: app }
+      - uses: actions/checkout@v4
+        with:
+          repository: YOUR_ORG/YOUR_BACKEND
+          path: backend
+          token: ${{ secrets.BACKEND_READ_TOKEN }}   # fine-grained, read-only, backend repo only
+      - uses: actions/checkout@v4
+        with: { repository: Eugen24/fullstack-sync, ref: v0.4.0, path: fss }
+      - name: Check
+        working-directory: app
+        run: |
+          python3 - <<'PY'
+          import json
+          c = json.load(open(".fullstack-sync.json"))
+          c["app"]["root"] = "${{ github.workspace }}/app"
+          c["backend"]["root"] = "${{ github.workspace }}/backend"
+          json.dump(c, open("/tmp/fss.json", "w"))
+          PY
+          python3 -I ../fss/scripts/drift_check.py --config /tmp/fss.json
+      # With an OpenAPI file instead of the FastAPI extractor: add  --openapi backend/openapi.json

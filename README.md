@@ -94,6 +94,23 @@ moves, and stays quiet on comment-only edits to a route file). Other stacks get 
 moved, so it re-nudges each turn a contract file shows as changed, until you act. See
 `docs/superpowers/specs/2026-06-30-sync-level-review-design.md`.
 
+## CI drift gate (no Claude, no tokens)
+
+`scripts/drift_check.py` fails a pull request when the app calls a path the backend does not serve:
+
+```
+python3 scripts/drift_check.py                      # uses ./.fullstack-sync.json
+python3 scripts/drift_check.py --openapi spec.json  # backend from an OpenAPI file instead
+python3 scripts/drift_check.py --json --warn        # machine output, never fails
+```
+
+Exit `0` in sync, `1` drift, `2` bad input. It reads string-literal paths from `app.endpoints_file`
+(every literal) and `app.services_glob` (only literals inside an HTTP call, so UI routes like
+`context.go('/home')` are ignored), then matches them against the FastAPI routes or OpenAPI paths.
+A base URL or `include_router` prefix present on only one side is tolerated. It checks **paths only**:
+methods and fields stay with the `api-contract-sync` skill, and dynamically built paths
+(`'$base/v4/$path'`) are not seen. A ready workflow is in `docs/examples/drift-gate.yml`.
+
 ## Testing
 
 ```
@@ -109,7 +126,7 @@ tested `scripts/sync_state.py`; the model only does contract *extraction*.
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md). Latest: **v0.3.1**, the drift-check Stop hook now takes about a second instead of up to 14 on backends with a virtualenv.
+See [CHANGELOG.md](CHANGELOG.md). Latest: **v0.4.0**, a CI drift gate that needs no Claude. v0.3.1 made the drift-check Stop hook take about a second instead of up to 14.
 
 ## Contributing
 

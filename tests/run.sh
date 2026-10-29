@@ -7,6 +7,7 @@ echo "== unit: fingerprint =="; python3 "$HERE/test_fingerprint.py" || fail=1
 echo "== unit: sync_state ==";  python3 "$HERE/test_sync_state.py"  || fail=1
 echo "== unit: extract_fastapi =="; python3 "$HERE/test_extract_fastapi.py" || fail=1
 echo "== unit: sync_gate ==";  python3 "$HERE/test_sync_gate.py"  || fail=1
+echo "== unit+cli: drift_check ==";  python3 "$HERE/test_drift_check.py"  || fail=1
 echo "== integration: sync_hook =="; bash "$HERE/test_sync_hook.sh" || fail=1
 echo "== integration: protocol =="; bash "$HERE/test_protocol.sh"  || fail=1
 echo "----"
