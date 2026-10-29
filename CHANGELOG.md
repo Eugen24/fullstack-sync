@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0
+- **Per-endpoint field check (`FIELD`):** links each HTTP call to the `Model.fromJson` that parses it and to the backend response model for that endpoint. Fails only for a non-null cast the backend does not declare; reads the scan cannot prove required are `FIELD?` review items. Dict-returning endpoints are skipped, never guessed.
+- **Dart constants resolved** (`'$v4/x'` with `const v4 = '/v4'`), and trailing `$path`-style dynamic segments are checked as a prefix (`DYNAMIC`).
+- **FastAPI extractor:** response models resolve across files with inheritance, `List/Optional/X | None` unwrapping, return annotations and `Field(alias=...)`; static `include_router` prefixes are applied; `backend.prefix_rule` handles directory-derived mounting.
+- Loose `FIELD?` now means "the backend never mentions this name" (class fields, attributes, keyword args, parameters, dict keys, identifier-like strings), a far stronger signal than before.
+- Stop hook also lists `FIELD` findings. `--no-endpoint-fields` turns the per-endpoint check off.
+- On the author's apps this removed every false `PATH` finding (4 on one app) and exposed the real ones; 40+ tests.
+
 ## 0.5.0
 - `drift_check.py` now checks HTTP methods (`METHOD`) as well as paths, and with `--fields` JSON field names (`FIELD?`: keys read in `fromJson` / written in `toJson` that no backend model declares). OpenAPI source also supplies methods and schema fields.
 - Honest field check: coverage guard skips FIELD output when the extractor cannot see the backend's models; `--strict-fields` makes it fail the run.

@@ -96,11 +96,11 @@ moved, so it re-nudges each turn a contract file shows as changed, until you act
 
 ## CI drift gate (no Claude, no tokens)
 
-`scripts/drift_check.py` checks the contract on every run: **paths, HTTP methods and JSON field names**.
+`scripts/drift_check.py` checks the contract on every run: **paths, HTTP methods and response fields**.
 
 ```
-python3 scripts/drift_check.py                       # PATH + METHOD, uses ./.fullstack-sync.json
-python3 scripts/drift_check.py --fields              # + FIELD? review list (report only)
+python3 scripts/drift_check.py                       # PATH, METHOD, per-endpoint FIELD
+python3 scripts/drift_check.py --fields              # + FIELD? review list
 python3 scripts/drift_check.py --strict-fields       # FIELD? findings fail the run too
 python3 scripts/drift_check.py --openapi spec.json   # backend from an OpenAPI file
 python3 scripts/drift_check.py --json --warn         # machine output, never fails
@@ -110,22 +110,31 @@ python3 scripts/drift_check.py --json --warn         # machine output, never fai
 |---|---|---|
 | `PATH` | the app calls a path no backend route serves | yes |
 | `METHOD` | the path exists, but not with the verb the app uses (`.get/.post/...`) | yes |
-| `FIELD?` | a key the app reads in `fromJson` or writes in `toJson` that no backend model declares | only with `--strict-fields` |
+| `FIELD` | per endpoint: the app parses the response with `Model.fromJson` and reads a key with a non-null cast (`j['id'] as String`, which throws when absent) that the backend's response model for that endpoint does not declare | yes |
+| `FIELD?` | review item: a key the app reads that the backend response model lacks but the app may tolerate (`?? x`, wrappers), or (loose, `--fields`) a name the backend never mentions anywhere | only with `--strict-fields` |
+| `DYNAMIC` | info: a path built from a runtime variable (`'$base/v4/$path'`), checked only as a prefix | no |
 
 Exit `0` clean, `1` drift, `2` bad input. The Stop hook runs the same check and puts the concrete
-`PATH`/`METHOD` lines in its nudge, so what you see is always against the current code.
+`PATH`/`METHOD`/`FIELD` lines in its nudge, so what you see is always against the current code.
 
-What it can and cannot see, honestly:
-- Paths and verbs come from string literals inside HTTP calls (UI routes like `context.go('/home')` are
-  ignored); `app.endpoints_file` counts every literal. A base URL or `include_router` prefix present on
-  only one side is tolerated, so it can miss a drift but should not invent one.
-- `FIELD?` compares the app's keys (snake_case-normalised, so `createdAt` equals `created_at`) with the
-  union of all backend model fields. It catches renames and typos, not a field that exists on a *different*
-  model, and it is a review list: a key may be client-only or the backend may return a plain dict.
-  If most keys are unknown the extractor cannot see that backend's models, so it says so and skips instead
-  of printing noise. Per-endpoint field checking stays with the `api-contract-sync` skill.
-- Dynamic paths (`'$base/v4/$path'`) are not seen. Opt out of a call with `// fss-ignore`, or list paths in
+How it resolves things, so findings are about the contract and not about plumbing:
+- **Dart constants:** `static const v4 = '/v4'; '$v4/app_feedback'` becomes `/v4/app_feedback`.
+- **Backend models** resolve across files, with inheritance, `List[X]` / `Optional[X]` / `X | None`, the return
+  annotation when there is no `response_model`, and `Field(alias=...)`.
+- **Backend routing:** static `include_router(mod.router, prefix=...)` is applied. Backends that mount routers by
+  directory (e.g. `routers/v4/tasks.py` becomes `/v4/tasks`) set
+  `"backend": {"prefix_rule": {"from_path": "routers", "skip": ["root"]}}` in `.fullstack-sync.json`.
+- **Backend responses that are plain dicts** have no declared fields: they are skipped, never guessed.
+
+What it still cannot see:
+- A prefix present on only one side is tolerated, so it can miss a drift but should not invent one.
+- Nested response fields are not flattened; request bodies are not compared per endpoint; no multi-level
+  router-in-router chains.
+- Whether the app *handles* a missing key: only a plain non-null cast counts as required.
+- Dynamic paths beyond a trailing `$path`-style variable. Opt out of a call with `// fss-ignore`, or list paths in
   `"drift_ignore": ["/v4/remo/{id}"]` in `.fullstack-sync.json`.
+- With a dict-returning backend, per-endpoint `FIELD` has nothing to compare; the loose `FIELD?` list then only
+  says which names the backend never mentions.
 
 A ready workflow is in `docs/examples/drift-gate.yml`.
 
@@ -144,7 +153,7 @@ tested `scripts/sync_state.py`; the model only does contract *extraction*.
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md). Latest: **v0.5.0**, the drift check now covers HTTP methods and field names. v0.4.0 added the CI gate; v0.3.1 made the Stop hook about 10x faster.
+See [CHANGELOG.md](CHANGELOG.md). Latest: **v0.6.0**, the drift check resolves Dart constants, cross-file backend models and router prefixes, and checks fields per endpoint. v0.4.0 added the CI gate; v0.3.1 made the Stop hook about 10x faster.
 
 ## Contributing
 

@@ -15,7 +15,7 @@ jobs:
           path: backend
           token: ${{ secrets.BACKEND_READ_TOKEN }}   # fine-grained, read-only, backend repo only
       - uses: actions/checkout@v4
-        with: { repository: Eugen24/fullstack-sync, ref: v0.5.0, path: fss }
+        with: { repository: Eugen24/fullstack-sync, ref: v0.6.0, path: fss }
       - name: Check
         working-directory: app
         run: |

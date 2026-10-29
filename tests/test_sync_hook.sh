@@ -68,6 +68,16 @@ OUT="$(run)"
 echo "$OUT" | grep -q "PATH .*missing" && ok "nudge_lists_path_drift" || bad "nudge_lists_path_drift"
 rm -rf "$W/lib"
 
+# per-endpoint field drift appears in the nudge too (overwrites the earlier lib/api.dart)
+mkdir -p "$W/lib"
+printf "class U {\n  factory U.fromJson(Map<String, dynamic> j) => U(a: j['id'] as int, b: j['ghost_key'] as String);\n}\nFuture<U> g() async => U.fromJson(await dio.get('/v3/users/\$id'));\n" > "$W/lib/api.dart"
+cat >> "$W/routers/users.py" <<'PY'
+@router.get("/{id}/another")
+def another(id: int): ...
+PY
+OUT="$(run)"
+echo "$OUT" | grep -q "FIELD .*ghost_key" && ok "nudge_lists_field_drift" || bad "nudge_lists_field_drift"
+
 # off level → silent even with a change
 python3 - "$W/.fullstack-sync.json" <<'PY'
 import json,sys
