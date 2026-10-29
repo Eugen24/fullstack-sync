@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 360" role="img" aria-labelledby="t d">
+  <title id="t">fullstack-sync catches contract drift</title>
+  <desc id="d">The app calls /v3/users/{id}/orders while the backend serves /v3/users/{id}/order. fullstack-sync flags the mismatch and names the side to fix.</desc>
+  <style>
+    .bg{fill:#0f172a}.card{fill:#1e293b;stroke:#334155;stroke-width:1.5}
+    .h{font:600 15px -apple-system,Segoe UI,Inter,sans-serif;fill:#94a3b8;letter-spacing:.04em}
+    .m{font:500 18px ui-monospace,SFMono-Regular,Menlo,monospace;fill:#e2e8f0}
+    .bad{fill:#f87171}.ok{fill:#4ade80}
+    .t{font:700 26px -apple-system,Segoe UI,Inter,sans-serif;fill:#f8fafc}
+    .s{font:400 15px -apple-system,Segoe UI,Inter,sans-serif;fill:#94a3b8}
+  </style>
+  <rect class="bg" width="960" height="360" rx="16"/>
+  <text class="t" x="40" y="56">App and API drifted. Nothing failed to compile.</text>
+  <text class="s" x="40" y="82">fullstack-sync diffs the two sides and names the one that is wrong.</text>
+  <rect class="card" x="40" y="116" width="380" height="150" rx="12"/>
+  <text class="h" x="64" y="148">FLUTTER APP</text>
+  <text class="m" x="64" y="190">GET /v3/users/{id}/<tspan class="bad">orders</tspan></text>
+  <text class="s" x="64" y="226">lib/core/api.dart</text>
+  <rect class="card" x="540" y="116" width="380" height="150" rx="12"/>
+  <text class="h" x="564" y="148">FASTAPI BACKEND</text>
+  <text class="m" x="564" y="190">GET /v3/users/{id}/<tspan class="ok">order</tspan></text>
+  <text class="s" x="564" y="226">routers/users.py</text>
+  <path d="M424 191h112" stroke="#f87171" stroke-width="3" stroke-dasharray="6 6"/>
+  <circle cx="480" cy="191" r="16" fill="#f87171"/>
+  <path d="M473 184l14 14M487 184l-14 14" stroke="#0f172a" stroke-width="3" stroke-linecap="round"/>
+  <rect x="40" y="290" width="880" height="48" rx="10" fill="#052e16" stroke="#166534"/>
+  <text class="m" x="64" y="320" style="font-size:16px"><tspan class="ok">fix</tspan>  app: orders to order  (backend is the source of truth)</text>
+</svg>

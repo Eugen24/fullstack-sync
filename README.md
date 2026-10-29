@@ -7,6 +7,8 @@
 
 **A Claude Code plugin that stops your app and your API from drifting apart.**
 
+![fullstack-sync flags the app calling /orders while the backend serves /order](docs/assets/drift.svg)
+
 Keep a client app and its backend API in lockstep. Catches the exact class of
 bug where the app calls an endpoint the backend doesn't expose (or vice-versa),
 field names drift, or a method/path disagrees — and fixes the named side.
