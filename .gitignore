@@ -3,3 +3,5 @@
 .fullstack-sync/
 .fullstack-sync.hook.json
 .superpowers/
+__pycache__/
+*.pyc
