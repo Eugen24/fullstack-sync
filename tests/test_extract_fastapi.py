@@ -108,6 +108,46 @@ def test_output_feeds_fingerprint():
         shutil.rmtree(tmp)
 
 
+def test_walk_skips_venv_vcs_and_cache_dirs():
+    tmp = tempfile.mkdtemp()
+    try:
+        _write(tmp, "users.py", ROUTER)
+        for skip in (".venv", "node_modules", ".git", "__pycache__", ".worktrees"):
+            d = os.path.join(tmp, skip, "lib")
+            os.makedirs(d)
+            _write(d, "vendored.py", NO_MODEL)
+        eps = extract_fastapi.extract([tmp])["endpoints"]
+        assert len(eps) == 2  # users only; nothing from the pruned dirs
+    finally:
+        shutil.rmtree(tmp)
+
+
+def test_unparseable_file_is_skipped_not_fatal():
+    tmp = tempfile.mkdtemp()
+    try:
+        _write(tmp, "users.py", ROUTER)
+        _write(tmp, "broken.py", "def (:\n")
+        with open(os.path.join(tmp, "binary.py"), "wb") as f:
+            f.write(b"\xff\xfe\x00bad")
+        eps = extract_fastapi.extract([tmp])["endpoints"]
+        assert len(eps) == 2
+    finally:
+        shutil.rmtree(tmp)
+
+
+def test_deadline_exceeded_raises():
+    tmp = tempfile.mkdtemp()
+    try:
+        _write(tmp, "users.py", ROUTER)
+        try:
+            extract_fastapi.extract([tmp], max_seconds=-1)
+        except TimeoutError:
+            return
+        raise AssertionError("expected TimeoutError")
+    finally:
+        shutil.rmtree(tmp)
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

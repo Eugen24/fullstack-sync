@@ -41,17 +41,17 @@ MATCHED="$(printf '%s\n' "$CHANGED" | python3 "$PLUGIN/scripts/sync_gate.py" mat
 
 # precise (FastAPI) vs coarse
 STATE="$ROOT/.fullstack-sync.hook.json"
-LAST="$(python3 -c "import json,os;p='$STATE';print(json.load(open(p)).get('last_hash','') if os.path.exists(p) else '')" 2>/dev/null)"
+LAST="$(python3 -c "import json,os,sys;p=sys.argv[1];print(json.load(open(p)).get('last_hash','') if os.path.exists(p) else '')" "$STATE" 2>/dev/null)"
 STACK="$(jget "backend.stack")"
 CUR=""
 if [ "$STACK" = "fastapi" ]; then
   BROOT="$(jget "backend.root")"
-  CUR="$(python3 "$PLUGIN/scripts/extract_fastapi.py" "$BROOT" 2>/dev/null | python3 "$PLUGIN/scripts/fingerprint.py" 2>/dev/null)"
+  CUR="$(python3 "$PLUGIN/scripts/extract_fastapi.py" --max-seconds 6 "$BROOT" 2>/dev/null | python3 "$PLUGIN/scripts/fingerprint.py" 2>/dev/null)"
 fi
 
 if [ -n "$CUR" ]; then
   if python3 "$PLUGIN/scripts/sync_gate.py" decide --contract-changed --current-hash "$CUR" --last-hash "$LAST" >/dev/null; then DEC="NUDGE"; else DEC="SILENT"; fi
-  python3 -c "import json;json.dump({'last_hash':'$CUR'},open('$STATE','w'))" 2>/dev/null
+  python3 -c "import json,sys;json.dump({'last_hash':sys.argv[2]},open(sys.argv[1],'w'))" "$STATE" "$CUR" 2>/dev/null
 else
   if python3 "$PLUGIN/scripts/sync_gate.py" decide --contract-changed >/dev/null; then DEC="NUDGE"; else DEC="SILENT"; fi
 fi

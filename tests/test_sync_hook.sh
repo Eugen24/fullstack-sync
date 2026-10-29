@@ -44,6 +44,16 @@ echo "$OUT" | grep -qi "contract moved" && ok "nudge_on_contract_change" || bad 
 # run again with no further change → silent (hash recorded)
 [ -z "$(run)" ] && ok "silent_after_recorded" || bad "silent_after_recorded"
 
+# unparseable vendored file under the backend root must not break precise mode
+mkdir -p "$W/.venv/lib"; printf 'def (:\n' > "$W/.venv/lib/bad.py"
+cat >> "$W/routers/users.py" <<'PY'
+@router.get("/{id}/venvcheck")
+def venvcheck(id: int): ...
+PY
+OUT="$(run)"
+echo "$OUT" | grep -qi "contract moved" && ok "nudge_with_venv_present" || bad "nudge_with_venv_present"
+[ -z "$(run)" ] && ok "silent_after_recorded_with_venv" || bad "silent_after_recorded_with_venv"
+
 # off level → silent even with a change
 python3 - "$W/.fullstack-sync.json" <<'PY'
 import json,sys
@@ -54,6 +64,20 @@ cat >> "$W/routers/users.py" <<'PY'
 def extra(id: int): ...
 PY
 [ -z "$(run)" ] && ok "silent_when_off" || bad "silent_when_off"
+
+# project path containing a quote must not break state handling
+Q="$(mktemp -d)/o'brien"; mkdir -p "$Q/routers"
+cp "$W/routers/users.py" "$Q/routers/users.py"
+sed "s#$W#$Q#g" "$W/.fullstack-sync.json" > "$Q/.fullstack-sync.json"
+python3 - "$Q/.fullstack-sync.json" <<'PY'
+import json,sys
+p=sys.argv[1]; d=json.load(open(p)); d["sync_level"]="low"; json.dump(d,open(p,"w"))
+PY
+git -C "$Q" init -q; git -C "$Q" -c user.email=t@t -c user.name=t add -A; git -C "$Q" -c user.email=t@t -c user.name=t commit -qm v1
+echo "# x" >> "$Q/routers/users.py"
+runq(){ CLAUDE_PROJECT_DIR="$Q" CLAUDE_PLUGIN_ROOT="$ROOT" bash "$HOOK" 2>/dev/null; }
+runq >/dev/null; [ -z "$(runq)" ] && ok "quote_in_path_state_ok" || bad "quote_in_path_state_ok"
+rm -rf "$(dirname "$Q")"
 
 echo "----"; [ "$FAIL" -eq 0 ] && echo "HOOK OK" || echo "HOOK FAILED"
 exit "$FAIL"
