@@ -82,12 +82,7 @@ def extract_file(path):
     return eps
 
 
-def extract(paths, max_seconds=None):
-    """Endpoints for every .py under paths. Unparseable files are skipped.
-
-    max_seconds: raise TimeoutError once exceeded (callers fall back to coarse mode).
-    """
-    deadline = None if max_seconds is None else time.monotonic() + max_seconds
+def _py_files(paths):
     files = []
     for p in paths:
         if os.path.isdir(p):
@@ -96,15 +91,46 @@ def extract(paths, max_seconds=None):
                 files += [os.path.join(root, n) for n in names if n.endswith(".py")]
         else:
             files.append(p)
-    eps = []
-    for f in sorted(files):
-        if deadline is not None and time.monotonic() > deadline:
-            raise TimeoutError("extract_fastapi: time budget exceeded")
+    return sorted(files)
+
+
+def _deadline(max_seconds):
+    return None if max_seconds is None else time.monotonic() + max_seconds
+
+
+def _check(deadline):
+    if deadline is not None and time.monotonic() > deadline:
+        raise TimeoutError("extract_fastapi: time budget exceeded")
+
+
+def extract(paths, max_seconds=None):
+    """Endpoints for every .py under paths. Unparseable files are skipped.
+
+    max_seconds: raise TimeoutError once exceeded (callers fall back to coarse mode).
+    """
+    deadline, eps = _deadline(max_seconds), []
+    for f in _py_files(paths):
+        _check(deadline)
         try:
             eps += extract_file(f)
         except (SyntaxError, UnicodeDecodeError, ValueError):
             continue
     return {"endpoints": eps}
+
+
+def all_model_fields(paths, max_seconds=None):
+    """Every annotated field name of every class under paths (response, request, DB models):
+    the universe of names the backend knows about."""
+    deadline, out = _deadline(max_seconds), set()
+    for f in _py_files(paths):
+        _check(deadline)
+        try:
+            tree = ast.parse(open(f).read())
+        except (SyntaxError, UnicodeDecodeError, ValueError):
+            continue
+        for fields in _model_fields(tree).values():
+            out.update(fields)
+    return out
 
 
 if __name__ == "__main__":

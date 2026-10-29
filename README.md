@@ -96,20 +96,38 @@ moved, so it re-nudges each turn a contract file shows as changed, until you act
 
 ## CI drift gate (no Claude, no tokens)
 
-`scripts/drift_check.py` fails a pull request when the app calls a path the backend does not serve:
+`scripts/drift_check.py` checks the contract on every run: **paths, HTTP methods and JSON field names**.
 
 ```
-python3 scripts/drift_check.py                      # uses ./.fullstack-sync.json
-python3 scripts/drift_check.py --openapi spec.json  # backend from an OpenAPI file instead
-python3 scripts/drift_check.py --json --warn        # machine output, never fails
+python3 scripts/drift_check.py                       # PATH + METHOD, uses ./.fullstack-sync.json
+python3 scripts/drift_check.py --fields              # + FIELD? review list (report only)
+python3 scripts/drift_check.py --strict-fields       # FIELD? findings fail the run too
+python3 scripts/drift_check.py --openapi spec.json   # backend from an OpenAPI file
+python3 scripts/drift_check.py --json --warn         # machine output, never fails
 ```
 
-Exit `0` in sync, `1` drift, `2` bad input. It reads string-literal paths from `app.endpoints_file`
-(every literal) and `app.services_glob` (only literals inside an HTTP call, so UI routes like
-`context.go('/home')` are ignored), then matches them against the FastAPI routes or OpenAPI paths.
-A base URL or `include_router` prefix present on only one side is tolerated. It checks **paths only**:
-methods and fields stay with the `api-contract-sync` skill, and dynamically built paths
-(`'$base/v4/$path'`) are not seen. A ready workflow is in `docs/examples/drift-gate.yml`.
+| Finding | Meaning | Fails the run |
+|---|---|---|
+| `PATH` | the app calls a path no backend route serves | yes |
+| `METHOD` | the path exists, but not with the verb the app uses (`.get/.post/...`) | yes |
+| `FIELD?` | a key the app reads in `fromJson` or writes in `toJson` that no backend model declares | only with `--strict-fields` |
+
+Exit `0` clean, `1` drift, `2` bad input. The Stop hook runs the same check and puts the concrete
+`PATH`/`METHOD` lines in its nudge, so what you see is always against the current code.
+
+What it can and cannot see, honestly:
+- Paths and verbs come from string literals inside HTTP calls (UI routes like `context.go('/home')` are
+  ignored); `app.endpoints_file` counts every literal. A base URL or `include_router` prefix present on
+  only one side is tolerated, so it can miss a drift but should not invent one.
+- `FIELD?` compares the app's keys (snake_case-normalised, so `createdAt` equals `created_at`) with the
+  union of all backend model fields. It catches renames and typos, not a field that exists on a *different*
+  model, and it is a review list: a key may be client-only or the backend may return a plain dict.
+  If most keys are unknown the extractor cannot see that backend's models, so it says so and skips instead
+  of printing noise. Per-endpoint field checking stays with the `api-contract-sync` skill.
+- Dynamic paths (`'$base/v4/$path'`) are not seen. Opt out of a call with `// fss-ignore`, or list paths in
+  `"drift_ignore": ["/v4/remo/{id}"]` in `.fullstack-sync.json`.
+
+A ready workflow is in `docs/examples/drift-gate.yml`.
 
 ## Testing
 
@@ -126,7 +144,7 @@ tested `scripts/sync_state.py`; the model only does contract *extraction*.
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md). Latest: **v0.4.0**, a CI drift gate that needs no Claude. v0.3.1 made the drift-check Stop hook take about a second instead of up to 14.
+See [CHANGELOG.md](CHANGELOG.md). Latest: **v0.5.0**, the drift check now covers HTTP methods and field names. v0.4.0 added the CI gate; v0.3.1 made the Stop hook about 10x faster.
 
 ## Contributing
 

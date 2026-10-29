@@ -46,7 +46,7 @@ STACK="$(jget "backend.stack")"
 CUR=""
 if [ "$STACK" = "fastapi" ]; then
   BROOT="$(jget "backend.root")"
-  CUR="$(python3 "$PLUGIN/scripts/extract_fastapi.py" --max-seconds 6 "$BROOT" 2>/dev/null | python3 "$PLUGIN/scripts/fingerprint.py" 2>/dev/null)"
+  CUR="$(python3 "$PLUGIN/scripts/extract_fastapi.py" --max-seconds 4 "$BROOT" 2>/dev/null | python3 "$PLUGIN/scripts/fingerprint.py" 2>/dev/null)"
 fi
 
 if [ -n "$CUR" ]; then
@@ -58,9 +58,12 @@ fi
 [ "$DEC" = "NUDGE" ] || exit 0
 
 FILES="$(printf '%s' "$MATCHED" | tr '\n' ' ')"
+# Concrete findings beat "review?": path/method drift now, within a small time budget.
+DRIFT="$(python3 "$PLUGIN/scripts/drift_check.py" --config "$CFG" --warn --max-seconds 4 2>/dev/null | grep -E '^(PATH|METHOD) ' | head -3 | cut -c1-200)"
 if [ "$LEVEL" = "hard" ]; then
   echo "fullstack-sync: contract moved ($FILES) — hard mode: run /fullstack-sync-review --hard (auto sync+commit, feature branch only)."
 else
   echo "fullstack-sync: contract moved ($FILES) — review? run /fullstack-sync-review or api-contract-sync."
 fi
+[ -n "$DRIFT" ] && printf '%s\n' "$DRIFT" | sed 's/^/  /'
 exit 0

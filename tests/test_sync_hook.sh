@@ -54,6 +54,20 @@ OUT="$(run)"
 echo "$OUT" | grep -qi "contract moved" && ok "nudge_with_venv_present" || bad "nudge_with_venv_present"
 [ -z "$(run)" ] && ok "silent_after_recorded_with_venv" || bad "silent_after_recorded_with_venv"
 
+# nudge carries concrete path drift when the app calls a path the backend does not serve
+mkdir -p "$W/lib"; printf "const gone = '/v3/users/{id}/missing';\n" > "$W/lib/api.dart"
+cat >> "$W/routers/users.py" <<'PY'
+@router.get("/{id}/drifted")
+def drifted(id: int): ...
+PY
+python3 - "$W/.fullstack-sync.json" <<'PY'
+import json,sys
+p=sys.argv[1]; d=json.load(open(p)); d["sync_level"]="low"; json.dump(d,open(p,"w"))
+PY
+OUT="$(run)"
+echo "$OUT" | grep -q "PATH .*missing" && ok "nudge_lists_path_drift" || bad "nudge_lists_path_drift"
+rm -rf "$W/lib"
+
 # off level → silent even with a change
 python3 - "$W/.fullstack-sync.json" <<'PY'
 import json,sys

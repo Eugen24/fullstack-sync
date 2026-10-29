@@ -15,7 +15,7 @@ jobs:
           path: backend
           token: ${{ secrets.BACKEND_READ_TOKEN }}   # fine-grained, read-only, backend repo only
       - uses: actions/checkout@v4
-        with: { repository: Eugen24/fullstack-sync, ref: v0.4.0, path: fss }
+        with: { repository: Eugen24/fullstack-sync, ref: v0.5.0, path: fss }
       - name: Check
         working-directory: app
         run: |
@@ -26,5 +26,5 @@ jobs:
           c["backend"]["root"] = "${{ github.workspace }}/backend"
           json.dump(c, open("/tmp/fss.json", "w"))
           PY
-          python3 -I ../fss/scripts/drift_check.py --config /tmp/fss.json
+          python3 -I ../fss/scripts/drift_check.py --config /tmp/fss.json   # add --fields to see FIELD? review items
       # With an OpenAPI file instead of the FastAPI extractor: add  --openapi backend/openapi.json

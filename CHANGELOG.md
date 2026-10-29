@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0
+- `drift_check.py` now checks HTTP methods (`METHOD`) as well as paths, and with `--fields` JSON field names (`FIELD?`: keys read in `fromJson` / written in `toJson` that no backend model declares). OpenAPI source also supplies methods and schema fields.
+- Honest field check: coverage guard skips FIELD output when the extractor cannot see the backend's models; `--strict-fields` makes it fail the run.
+- The Stop hook now runs the check and lists concrete `PATH`/`METHOD` findings in its nudge.
+- Opt-outs: `// fss-ignore` and `drift_ignore` in the config. `app.root` defaults to the config's directory.
+- Fixed: a verb from an earlier statement leaked into a later wrapper call (false `METHOD`); an unserved-prefix rule hid real endpoints that were also a prefix of another path.
+- 15 drift tests, plus a hook test for concrete nudges.
+
 ## 0.4.0
 - New `scripts/drift_check.py`: a CI drift gate that needs no Claude. Fails when the app calls a path the backend does not serve; backend from the FastAPI extractor or an OpenAPI file (`--openapi`). Exit 0/1/2, `--json`, `--warn`.
 - Example GitHub Actions workflow in `docs/examples/drift-gate.yml`.
