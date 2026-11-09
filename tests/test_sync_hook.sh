@@ -44,6 +44,19 @@ echo "$OUT" | grep -qi "contract moved" && ok "nudge_on_contract_change" || bad 
 # run again with no further change → silent (hash recorded)
 [ -z "$(run)" ] && ok "silent_after_recorded" || bad "silent_after_recorded"
 
+# unchanged contract files + backend → fast skip key recorded, and a run with a poisoned last_hash stays silent
+grep -q '"last_key": "[0-9a-f]\{64\}"' "$W/.fullstack-sync.hook.json" && ok "skip_key_recorded" || bad "skip_key_recorded"
+python3 - "$W/.fullstack-sync.hook.json" <<'PY'
+import json,sys
+p=sys.argv[1]; d=json.load(open(p)); d["last_hash"]="stale"; json.dump(d,open(p,"w"))
+PY
+[ -z "$(run)" ] && ok "skips_extraction_when_unchanged" || bad "skips_extraction_when_unchanged"
+python3 - "$W/.fullstack-sync.hook.json" <<'PY'
+import json,sys
+p=sys.argv[1]; d=json.load(open(p)); d.pop("last_key"); json.dump(d,open(p,"w"))
+PY
+run >/dev/null # re-records the real hash and key
+
 # unparseable vendored file under the backend root must not break precise mode
 mkdir -p "$W/.venv/lib"; printf 'def (:\n' > "$W/.venv/lib/bad.py"
 cat >> "$W/routers/users.py" <<'PY'
