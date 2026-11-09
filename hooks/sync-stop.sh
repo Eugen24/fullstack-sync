@@ -46,12 +46,27 @@ STACK="$(jget "backend.stack")"
 CUR=""
 if [ "$STACK" = "fastapi" ]; then
   BROOT="$(jget "backend.root")"
+  # Fast skip (~50 ms): extraction + drift take ~5 s, so skip them when neither the matched contract files
+  # (path, mtime, size) nor the backend repo (HEAD + dirty files) changed since the last Stop.
+  BSTATE="$( { git -C "$BROOT" rev-parse HEAD; git -C "$BROOT" status --porcelain; } 2>/dev/null )"
+  KEY="$(printf '%s\n' "$MATCHED" | python3 -c "
+import hashlib, os, sys
+root, bstate = sys.argv[1], sys.argv[2]
+h = hashlib.sha256(bstate.encode())
+for p in sys.stdin.read().splitlines():
+    try:
+        s = os.stat(os.path.join(root, p)); h.update(f'{p}:{s.st_mtime_ns}:{s.st_size}\n'.encode())
+    except OSError:
+        h.update(f'{p}:gone\n'.encode())
+print(h.hexdigest())" "$ROOT" "$BSTATE" 2>/dev/null)"
+  LASTKEY="$(python3 -c "import json,os,sys;p=sys.argv[1];print(json.load(open(p)).get('last_key','') if os.path.exists(p) else '')" "$STATE" 2>/dev/null)"
+  [ -n "$KEY" ] && [ "$KEY" = "$LASTKEY" ] && exit 0
   CUR="$(python3 "$PLUGIN/scripts/extract_fastapi.py" --max-seconds 4 "$BROOT" 2>/dev/null | python3 "$PLUGIN/scripts/fingerprint.py" 2>/dev/null)"
 fi
 
 if [ -n "$CUR" ]; then
   if python3 "$PLUGIN/scripts/sync_gate.py" decide --contract-changed --current-hash "$CUR" --last-hash "$LAST" >/dev/null; then DEC="NUDGE"; else DEC="SILENT"; fi
-  python3 -c "import json,sys;json.dump({'last_hash':sys.argv[2]},open(sys.argv[1],'w'))" "$STATE" "$CUR" 2>/dev/null
+  python3 -c "import json,sys;json.dump({'last_hash':sys.argv[2],'last_key':sys.argv[3]},open(sys.argv[1],'w'))" "$STATE" "$CUR" "${KEY:-}" 2>/dev/null
 else
   if python3 "$PLUGIN/scripts/sync_gate.py" decide --contract-changed >/dev/null; then DEC="NUDGE"; else DEC="SILENT"; fi
 fi

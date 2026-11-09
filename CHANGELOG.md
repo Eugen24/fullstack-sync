@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.7.1
+- **Faster Stop hook:** skips FastAPI extraction and the drift check (~5 s together) when the matched contract files (path, mtime, size) and the backend repo (HEAD + dirty files) are unchanged since the last Stop. Measured: ~0.3 s instead of 5-15 s per answer while contract edits stay uncommitted.
+
 ## 0.7.0
 - **Request-body check (`BODY`):** for POST/PUT/PATCH calls with an inline JSON map, fails when the app sends a key the backend's request model does not declare (Pydantic drops it silently) or omits a field the model requires. Request models resolve like response models (inheritance, `Optional[X]`, `Field(alias=...)`; `Depends/Query/Path/...` params are not bodies; list bodies are not judged). OpenAPI `requestBody` is supported. `--no-body` turns it off.
 - Findings are now per call site: one path used with several verbs keeps each verb's model and body, and a `METHOD` finding no longer hides the other sites' `FIELD`/`BODY` findings.
