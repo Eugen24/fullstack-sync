@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.7.1
+- The Stop hook runs async: it no longer blocks the end of every turn. Under machine load (parallel sessions, builds) the FastAPI extract + drift check took past the 10s timeout and was cancelled on 62 of 70 runs; the timeout is now 30s since nothing waits on it.
+
 ## 0.7.0
 - **Request-body check (`BODY`):** for POST/PUT/PATCH calls with an inline JSON map, fails when the app sends a key the backend's request model does not declare (Pydantic drops it silently) or omits a field the model requires. Request models resolve like response models (inheritance, `Optional[X]`, `Field(alias=...)`; `Depends/Query/Path/...` params are not bodies; list bodies are not judged). OpenAPI `requestBody` is supported. `--no-body` turns it off.
 - Findings are now per call site: one path used with several verbs keeps each verb's model and body, and a `METHOD` finding no longer hides the other sites' `FIELD`/`BODY` findings.
